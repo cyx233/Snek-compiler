@@ -2,3 +2,4 @@
 *.a
 *.o
 *.run
+Cargo.lock
