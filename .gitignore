@@ -3,3 +3,4 @@
 *.o
 *.run
 Cargo.lock
+.vscode
