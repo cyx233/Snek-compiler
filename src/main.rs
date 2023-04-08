@@ -47,13 +47,7 @@ fn main() -> std::io::Result<()> {
     let expr = parse_expr(&parse(&in_contents).unwrap());
     let result = compile_expr(&expr);
     let asm_program = format!(
-        "
-        section .text
-        global our_code_starts_here
-        our_code_starts_here: 
-        {}
-        ret
-        ",
+        "section .text\nglobal our_code_starts_here\nour_code_starts_here:\n{}\nret",
         result
     );
 
