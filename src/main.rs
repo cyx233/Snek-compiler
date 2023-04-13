@@ -5,33 +5,48 @@ use std::io::prelude::*;
 use sexp::Atom::*;
 use sexp::*;
 
+use im::HashMap;
+
+#[derive(Debug)]
+enum Val {
+    Reg(Reg),
+    Imm(i32),
+    RegOffset(Reg, i32),
+}
+
+#[derive(Debug)]
+enum Reg {
+    RAX,
+    RSP,
+}
+
+#[derive(Debug)]
+enum Instr {
+    IMov(Val, Val),
+    IAdd(Val, Val),
+    ISub(Val, Val),
+}
+
+#[derive(Debug)]
+enum Op1 {
+    Add1,
+    Sub1,
+}
+
+#[derive(Debug)]
+enum Op2 {
+    Plus,
+    Minus,
+    Times,
+}
+
+#[derive(Debug)]
 enum Expr {
-    Num(i32),
-    Add1(Box<Expr>),
-    Sub1(Box<Expr>),
-    Negate(Box<Expr>),
-}
-
-fn parse_expr(s: &Sexp) -> Expr {
-    match s {
-        Sexp::Atom(I(n)) => Expr::Num(i32::try_from(*n).unwrap()),
-        Sexp::List(vec) => match &vec[..] {
-            [Sexp::Atom(S(op)), e] if op == "add1" => Expr::Add1(Box::new(parse_expr(e))),
-            [Sexp::Atom(S(op)), e] if op == "sub1" => Expr::Sub1(Box::new(parse_expr(e))),
-            [Sexp::Atom(S(op)), e] if op == "negate" => Expr::Negate(Box::new(parse_expr(e))),
-            _ => panic!("parse error"),
-        },
-        _ => panic!("parse error"),
-    }
-}
-
-fn compile_expr(e: &Expr) -> String {
-    match e {
-        Expr::Num(n) => format!("mov rax, {}", *n),
-        Expr::Add1(subexpr) => compile_expr(subexpr) + "\nadd rax, 1",
-        Expr::Sub1(subexpr) => compile_expr(subexpr) + "\nsub rax, 1",
-        Expr::Negate(subexpr) => compile_expr(subexpr) + "\nneg rax",
-    }
+    Number(i32),
+    Id(String),
+    Let(Vec<(String, Expr)>, Box<Expr>),
+    UnOp(Op1, Box<Expr>),
+    BinOp(Op2, Box<Expr>, Box<Expr>),
 }
 
 fn main() -> std::io::Result<()> {
@@ -40,16 +55,18 @@ fn main() -> std::io::Result<()> {
     let in_name = &args[1];
     let out_name = &args[2];
 
-    let mut in_file = File::open(in_name)?;
-    let mut in_contents = String::new();
-    in_file.read_to_string(&mut in_contents)?;
+    // You will make result hold the result of actually compiling
+    let result = "mov rax, 131";
 
-    let expr = parse_expr(&parse(&in_contents).unwrap());
-    let result = compile_expr(&expr);
-    let asm_program = format!(
-        "section .text\nglobal our_code_starts_here\nour_code_starts_here:\n{}\nret",
-        result
-    );
+    let asm_program = vec![
+        "section .text",
+        "git config pull.rebase falsesection .text",
+        "global our_code_starts_here",
+        "our_code_starts_here",
+        result,
+        "ret",
+    ]
+    .join("\n");
 
     let mut out_file = File::create(out_name)?;
     out_file.write_all(asm_program.as_bytes())?;
