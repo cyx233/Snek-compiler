@@ -8,6 +8,8 @@ success_tests! {
     binding: "5",
     quick_brown_fox:"27",
     negative:"-5",
+    let_arith:"9",
+    nested_let:"11"
 }
 
 failure_tests! {
