@@ -25,6 +25,7 @@ enum Instr {
     IMov(Val, Val),
     IAdd(Val, Val),
     ISub(Val, Val),
+    IMul(Val, Val),
 }
 
 #[derive(Debug)]
@@ -49,7 +50,7 @@ enum Expr {
     BinOp(Op2, Box<Expr>, Box<Expr>),
 }
 
-fn parse_binding(s: &Sexp) -> (String, Expr) {
+fn parse_bind(s: &Sexp) -> (String, Expr) {
     if let Sexp::List(vec) = s {
         if let [Sexp::Atom(S(id)), e] = &vec[..] {
             (id.clone(), parse_expr(e))
@@ -71,7 +72,7 @@ fn parse_expr(s: &Sexp) -> Expr {
                 let mut env = Vec::new();
                 if let Sexp::List(bindings) = e1 {
                     for binding in bindings {
-                        env.push(parse_binding(binding));
+                        env.push(parse_bind(binding));
                     }
                     Expr::Let(env, Box::new(parse_expr(e2)))
                 } else {
@@ -100,50 +101,127 @@ fn parse_expr(s: &Sexp) -> Expr {
     }
 }
 
-fn compile_expr(e: &Expr, si: i32, env: &HashMap<String, i32>) -> String {
+impl Reg {
+    fn to_string(&self) -> String {
+        match self {
+            Reg::RAX => "rax".to_string(),
+            Reg::RSP => "rsp".to_string(),
+        }
+    }
+}
+
+impl Val {
+    fn to_string(&self) -> String {
+        match self {
+            Val::Imm(n) => n.to_string(),
+            Val::Reg(reg) => reg.to_string(),
+            Val::RegOffset(reg, offset) => format!("[{}-{}]", reg.to_string(), offset * 8),
+        }
+    }
+}
+
+impl Instr {
+    fn to_string(&self) -> String {
+        match self {
+            Instr::IMov(v1, v2) => format!("mov {},{}", v1.to_string(), v2.to_string()),
+            Instr::IAdd(v1, v2) => format!("add {},{}", v1.to_string(), v2.to_string()),
+            Instr::ISub(v1, v2) => format!("sub {},{}", v1.to_string(), v2.to_string()),
+            Instr::IMul(v1, v2) => format!("imul {},{}", v1.to_string(), v2.to_string()),
+        }
+    }
+}
+
+fn compile(e: &Expr) -> String {
+    let ir_instrs = compile_to_instrs(e, 2, &HashMap::new());
+    ir_instrs
+        .iter()
+        .map(|instr| instr.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr> {
     match e {
-        Expr::Number(n) => format!("mov rax, {}", *n),
+        Expr::Number(n) => vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))],
         Expr::Id(id) => match env.get(id) {
-            Some(n) => format!("mov rax, [rsp - {n}]"),
-            None => panic!("Unbound variable identifier {id}"),
+            Some(n) => {
+                vec![Instr::IMov(
+                    Val::Reg(Reg::RAX),
+                    Val::RegOffset(Reg::RSP, *n),
+                )]
+            }
+            None => {
+                panic!("Unbound variable identifier {id}")
+            }
         },
         Expr::Let(bindings, body) => {
+            let mut result: Vec<Instr> = Vec::new();
             let mut nenv = env.clone();
             let mut cur_si = si;
-            let mut binding_instrs: Vec<String> = Vec::new();
             for (id, value_expr) in bindings {
                 if nenv.contains_key(id) {
                     panic!("Duplicate binding")
                 } else {
-                    binding_instrs.push(compile_expr(value_expr, cur_si, &nenv));
-                    binding_instrs.push(format!("mov [rsp-{}], rax", cur_si * 8));
-                    nenv.insert(id.clone(), cur_si * 8);
+                    nenv.insert(id.clone(), cur_si);
+                    result.extend(compile_to_instrs(value_expr, si, &nenv));
+                    result.push(Instr::IMov(
+                        Val::RegOffset(Reg::RSP, cur_si),
+                        Val::Reg(Reg::RAX),
+                    ));
                     cur_si += 1;
                 }
             }
-            let body_instrs = compile_expr(&body, cur_si + 1, &nenv);
-            vec![binding_instrs.join("\n"), body_instrs].join("\n")
+            result.extend(compile_to_instrs(body, cur_si, &nenv));
+            result
         }
-        Expr::UnOp(op, e) => match op {
-            Op1::Add1 => vec![compile_expr(e, si, env), "add rax, 1".to_string()].join("\n"),
-            Op1::Sub1 => vec![compile_expr(e, si, env), "sub rax, 1".to_string()].join("\n"),
-        },
-        Expr::BinOp(op, e1, e2) => {
-            let e1_instrs = compile_expr(e1, si, env);
-            let concat_instrs = format!("mov [rsp-{}], rax", si * 8);
-            let e2_instrs = compile_expr(e2, si + 1, env);
-            let op_instrs = match op {
-                Op2::Plus => {
-                    format!("add rax, [rsp-{}]", si * 8)
+        Expr::UnOp(op, e) => {
+            let mut result: Vec<Instr> = Vec::new();
+            match op {
+                Op1::Add1 => {
+                    result.extend(compile_to_instrs(e, si, env));
+                    result.push(Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)));
                 }
-                Op2::Minus => {
-                    format!("sub [rsp-{}], rax", si * 8)
-                }
-                Op2::Times => {
-                    format!("imul rax, [rsp-{}]", si * 8)
+                Op1::Sub1 => {
+                    result.extend(compile_to_instrs(e, si, env));
+                    result.push(Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)));
                 }
             };
-            vec![e1_instrs, concat_instrs, e2_instrs, op_instrs].join("\n")
+            result
+        }
+        Expr::BinOp(op, e1, e2) => {
+            let mut result: Vec<Instr> = Vec::new();
+            result.extend(compile_to_instrs(e1, si, env));
+            result.push(Instr::IMov(
+                Val::RegOffset(Reg::RSP, si),
+                Val::Reg(Reg::RAX),
+            ));
+            result.extend(compile_to_instrs(e2, si + 1, env));
+
+            match op {
+                Op2::Plus => {
+                    result.push(Instr::IAdd(
+                        Val::Reg(Reg::RAX),
+                        Val::RegOffset(Reg::RSP, si),
+                    ));
+                }
+                Op2::Minus => {
+                    result.push(Instr::ISub(
+                        Val::RegOffset(Reg::RSP, si),
+                        Val::Reg(Reg::RAX),
+                    ));
+                    result.push(Instr::IMov(
+                        Val::Reg(Reg::RAX),
+                        Val::RegOffset(Reg::RSP, si),
+                    ));
+                }
+                Op2::Times => {
+                    result.push(Instr::IMul(
+                        Val::Reg(Reg::RAX),
+                        Val::RegOffset(Reg::RSP, si),
+                    ));
+                }
+            };
+            result
         }
     }
 }
@@ -160,7 +238,7 @@ fn main() -> std::io::Result<()> {
     in_file.read_to_string(&mut in_contents)?;
 
     let expr = parse_expr(&parse(&in_contents).unwrap());
-    let result = compile_expr(&expr, 2, &HashMap::new());
+    let result = compile(&expr);
 
     let asm_program = vec![
         "section .text",
