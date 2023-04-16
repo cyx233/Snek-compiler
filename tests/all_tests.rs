@@ -6,6 +6,7 @@ success_tests! {
     add: "15",
     nested_arith: "25",
     binding: "5",
+    quick_brown_fox:"27",
 }
 
 failure_tests! {

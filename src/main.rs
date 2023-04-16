@@ -81,10 +81,14 @@ fn parse_expr(s: &Sexp) -> Expr {
             [Sexp::Atom(S(op)), e1, e2] if op == "let" => {
                 let mut env = Vec::new();
                 if let Sexp::List(bindings) = e1 {
-                    for binding in bindings {
-                        env.push(parse_bind(binding));
+                    if bindings.is_empty() {
+                        panic!("Invalid");
+                    } else {
+                        for binding in bindings {
+                            env.push(parse_bind(binding));
+                        }
+                        Expr::Let(env, Box::new(parse_expr(e2)))
                     }
-                    Expr::Let(env, Box::new(parse_expr(e2)))
                 } else {
                     panic!("Invalid")
                 }
@@ -216,13 +220,17 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr
                     ));
                 }
                 Op2::Minus => {
-                    result.push(Instr::ISub(
-                        Val::RegOffset(Reg::RSP, si),
+                    result.push(Instr::IMov(
+                        Val::RegOffset(Reg::RSP, si + 1),
                         Val::Reg(Reg::RAX),
                     ));
                     result.push(Instr::IMov(
                         Val::Reg(Reg::RAX),
                         Val::RegOffset(Reg::RSP, si),
+                    ));
+                    result.push(Instr::ISub(
+                        Val::Reg(Reg::RAX),
+                        Val::RegOffset(Reg::RSP, si + 1),
                     ));
                 }
                 Op2::Times => {
