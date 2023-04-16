@@ -15,4 +15,7 @@ success_tests! {
 failure_tests! {
     unbound_id: "Unbound variable identifier x",
     duplicate_binding: "Duplicate binding",
+    bad_parse: "Invalid",
+    bad_prog: "Invalid",
+    bad_id:"Invalid",
 }
