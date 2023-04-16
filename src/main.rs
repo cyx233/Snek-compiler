@@ -17,6 +17,7 @@ enum Val {
 #[derive(Debug)]
 enum Reg {
     RAX,
+    RBX,
     RSP,
 }
 
@@ -119,6 +120,7 @@ impl Reg {
     fn to_string(&self) -> String {
         match self {
             Reg::RAX => "rax".to_string(),
+            Reg::RBX => "rbx".to_string(),
             Reg::RSP => "rsp".to_string(),
         }
     }
@@ -221,17 +223,11 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr
                 }
                 Op2::Minus => {
                     result.push(Instr::IMov(
-                        Val::RegOffset(Reg::RSP, si + 1),
-                        Val::Reg(Reg::RAX),
-                    ));
-                    result.push(Instr::IMov(
-                        Val::Reg(Reg::RAX),
+                        Val::Reg(Reg::RBX),
                         Val::RegOffset(Reg::RSP, si),
                     ));
-                    result.push(Instr::ISub(
-                        Val::Reg(Reg::RAX),
-                        Val::RegOffset(Reg::RSP, si + 1),
-                    ));
+                    result.push(Instr::ISub(Val::Reg(Reg::RBX), Val::Reg(Reg::RAX)));
+                    result.push(Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RBX)));
                 }
                 Op2::Times => {
                     result.push(Instr::IMul(
