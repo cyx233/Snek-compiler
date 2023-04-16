@@ -64,7 +64,10 @@ fn parse_bind(s: &Sexp) -> (String, Expr) {
 
 fn parse_expr(s: &Sexp) -> Expr {
     match s {
-        Sexp::Atom(I(n)) => Expr::Number(i32::try_from(*n).unwrap()),
+        Sexp::Atom(I(n)) => match i32::try_from(*n) {
+            Ok(i) => Expr::Number(i),
+            Err(_) => panic!("Invalid"),
+        },
         Sexp::Atom(S(id)) => {
             let re = regex::Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
             if re.is_match(id) {
@@ -245,20 +248,23 @@ fn main() -> std::io::Result<()> {
     let mut in_file = File::open(in_name)?;
     in_file.read_to_string(&mut in_contents)?;
 
-    let expr = parse_expr(&parse(&in_contents).unwrap());
-    let result = compile(&expr);
+    if let Ok(sexpr) = parse(&in_contents) {
+        let expr = parse_expr(&sexpr);
+        let result = compile(&expr);
+        let asm_program = vec![
+            "section .text",
+            "global our_code_starts_here",
+            "our_code_starts_here:",
+            &result,
+            "ret",
+        ]
+        .join("\n");
 
-    let asm_program = vec![
-        "section .text",
-        "global our_code_starts_here",
-        "our_code_starts_here:",
-        &result,
-        "ret",
-    ]
-    .join("\n");
+        let mut out_file = File::create(out_name)?;
+        out_file.write_all(asm_program.as_bytes())?;
 
-    let mut out_file = File::create(out_name)?;
-    out_file.write_all(asm_program.as_bytes())?;
-
-    Ok(())
+        Ok(())
+    } else {
+        panic!("Invalid")
+    }
 }
