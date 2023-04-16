@@ -132,8 +132,7 @@ impl Instr {
 }
 
 fn compile(e: &Expr) -> String {
-    let ir_instrs = compile_to_instrs(e, 2, &HashMap::new());
-    ir_instrs
+    compile_to_instrs(e, 2, &HashMap::new())
         .iter()
         .map(|instr| instr.to_string())
         .collect::<Vec<String>>()
@@ -156,12 +155,14 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr
         },
         Expr::Let(bindings, body) => {
             let mut result: Vec<Instr> = Vec::new();
-            let mut nenv = env.clone();
+            let mut nenv: HashMap<String, i32> = env.clone();
+            let mut cur_env: HashMap<String, i32> = HashMap::new();
             let mut cur_si = si;
             for (id, value_expr) in bindings {
-                if nenv.contains_key(id) {
+                if cur_env.contains_key(id) {
                     panic!("Duplicate binding")
                 } else {
+                    cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
                     result.extend(compile_to_instrs(value_expr, si, &nenv));
                     result.push(Instr::IMov(
