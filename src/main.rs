@@ -65,7 +65,14 @@ fn parse_bind(s: &Sexp) -> (String, Expr) {
 fn parse_expr(s: &Sexp) -> Expr {
     match s {
         Sexp::Atom(I(n)) => Expr::Number(i32::try_from(*n).unwrap()),
-        Sexp::Atom(S(id)) => Expr::Id(id.clone()),
+        Sexp::Atom(S(id)) => {
+            let re = regex::Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
+            if re.is_match(id) {
+                Expr::Id(id.clone())
+            } else {
+                panic!("Invalid")
+            }
+        }
         Sexp::List(vec) => match &vec[..] {
             // (let, <bindings>, <expr>) => Let
             [Sexp::Atom(S(op)), e1, e2] if op == "let" => {
