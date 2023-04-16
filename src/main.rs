@@ -180,7 +180,7 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr
                 } else {
                     cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
-                    result.extend(compile_to_instrs(value_expr, si, &nenv));
+                    result.extend(compile_to_instrs(value_expr, cur_si, &nenv));
                     result.push(Instr::IMov(
                         Val::RegOffset(Reg::RSP, cur_si),
                         Val::Reg(Reg::RAX),
