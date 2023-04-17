@@ -6,6 +6,12 @@ use sexp::Atom::*;
 use sexp::*;
 
 use im::HashMap;
+use lazy_static::lazy_static;
+use regex::Regex;
+
+lazy_static! {
+    static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
+}
 
 #[derive(Debug)]
 enum Val {
@@ -51,68 +57,71 @@ enum Expr {
     BinOp(Op2, Box<Expr>, Box<Expr>),
 }
 
-fn parse_bind(s: &Sexp) -> (String, Expr) {
-    if let Sexp::List(vec) = s {
-        if let [Sexp::Atom(S(id)), e] = &vec[..] {
-            (id.clone(), parse_expr(e))
-        } else {
-            panic!("Invalid")
-        }
-    } else {
-        panic!("Invalid")
+fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
+    match s {
+        Sexp::List(vec) => match &vec[..] {
+            [Sexp::Atom(S(id)), e] => {
+                if ID_REGEX.is_match(id) {
+                    let e_instrs = parse_expr(e)?;
+                    Ok((id.clone(), e_instrs))
+                } else {
+                    Err(format!("Invalid ID {}", id))
+                }
+            }
+            _ => Err("bad bind".to_string()),
+        },
+        _ => Err("bindings is not a List".to_string()),
     }
 }
 
-fn parse_expr(s: &Sexp) -> Expr {
+fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
-        Sexp::Atom(I(n)) => match i32::try_from(*n) {
-            Ok(i) => Expr::Number(i),
-            Err(_) => panic!("Invalid"),
-        },
-        Sexp::Atom(S(id)) => {
-            let re = regex::Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-            if re.is_match(id) {
-                Expr::Id(id.clone())
-            } else {
-                panic!("Invalid")
-            }
-        }
+        Sexp::Atom(I(n)) => i32::try_from(*n)
+            .map(Expr::Number)
+            .map_err(|e| e.to_string()),
+        Sexp::Atom(S(id)) => Ok(Expr::Id(id.clone())),
         Sexp::List(vec) => match &vec[..] {
             // (let, <bindings>, <expr>) => Let
-            [Sexp::Atom(S(op)), e1, e2] if op == "let" => {
-                let mut env = Vec::new();
-                if let Sexp::List(bindings) = e1 {
-                    if bindings.is_empty() {
-                        panic!("Invalid");
-                    } else {
-                        for binding in bindings {
-                            env.push(parse_bind(binding));
-                        }
-                        Expr::Let(env, Box::new(parse_expr(e2)))
-                    }
-                } else {
-                    panic!("Invalid")
+            [Sexp::Atom(S(op)), e1, e2] if op == "let" => match e1 {
+                Sexp::List(bindings) if !bindings.is_empty() => {
+                    let env = bindings
+                        .iter()
+                        .map(|b| parse_bind(b))
+                        .collect::<Result<Vec<(String, Expr)>, String>>()?;
+                    let body = parse_expr(e2)?;
+                    Ok(Expr::Let(env, Box::new(body)))
+                }
+                Sexp::List(bindings) if bindings.is_empty() => Err("empty binding".to_string()),
+                _ => Err("Bad Sytax: Let".to_string()),
+            },
+            // (<op>, <expr>) => UnOp
+            [Sexp::Atom(S(op)), e] => {
+                let e_instrs = parse_expr(e)?;
+                match op.as_str() {
+                    "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_instrs))),
+                    "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_instrs))),
+                    _ => Err(format!("Unknow operator {}", op)),
                 }
             }
-            // (<op>, <expr>) => UnOp
-            [Sexp::Atom(S(op)), e] => match op.as_str() {
-                "add1" => Expr::UnOp(Op1::Add1, Box::new(parse_expr(e))),
-                "sub1" => Expr::UnOp(Op1::Sub1, Box::new(parse_expr(e))),
-                _ => panic!("Invalid"),
-            },
             // (<op>, <expr>, <expr>) => BinOp
             [Sexp::Atom(S(op)), e1, e2] => {
                 let expr_op = match op.as_str() {
                     "+" => Op2::Plus,
                     "-" => Op2::Minus,
                     "*" => Op2::Times,
-                    _ => panic!("Invalid"),
+                    _ => return Err(format!("Unknow operator {}", op)),
                 };
-                Expr::BinOp(expr_op, Box::new(parse_expr(e1)), Box::new(parse_expr(e2)))
+                let e1_instrs = parse_expr(e1)?;
+                let e2_instrs = parse_expr(e2)?;
+                Ok(Expr::BinOp(
+                    expr_op,
+                    Box::new(e1_instrs),
+                    Box::new(e2_instrs),
+                ))
             }
-            _ => panic!("Invalid"),
+            _ => Err("Bad Syntax: Sexp::List".to_string()),
         },
-        _ => panic!("Invalid"),
+        _ => Err("Bad Syntax: Sexp".to_string()),
     }
 }
 
@@ -148,26 +157,25 @@ impl Instr {
 }
 
 fn compile(e: &Expr) -> String {
-    compile_to_instrs(e, 2, &HashMap::new())
-        .iter()
-        .map(|instr| instr.to_string())
-        .collect::<Vec<String>>()
-        .join("\n")
+    match compile_to_instrs(e, 2, &HashMap::new()) {
+        Ok(instrs) => instrs
+            .iter()
+            .map(|instr| instr.to_string())
+            .collect::<Vec<String>>()
+            .join("\n"),
+        Err(msg) => panic!("{}", msg),
+    }
 }
 
-fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr> {
+fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Vec<Instr>, String> {
     match e {
-        Expr::Number(n) => vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))],
+        Expr::Number(n) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))]),
         Expr::Id(id) => match env.get(id) {
-            Some(n) => {
-                vec![Instr::IMov(
-                    Val::Reg(Reg::RAX),
-                    Val::RegOffset(Reg::RSP, *n),
-                )]
-            }
-            None => {
-                panic!("Unbound variable identifier {id}")
-            }
+            Some(n) => Ok(vec![Instr::IMov(
+                Val::Reg(Reg::RAX),
+                Val::RegOffset(Reg::RSP, *n),
+            )]),
+            None => Err(format!("Unbound variable identifier {id}")),
         },
         Expr::Let(bindings, body) => {
             let mut result: Vec<Instr> = Vec::new();
@@ -176,11 +184,12 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr
             let mut cur_si = si;
             for (id, value_expr) in bindings {
                 if cur_env.contains_key(id) {
-                    panic!("Duplicate binding")
+                    return Err("Duplicate binding".to_string());
                 } else {
                     cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
-                    result.extend(compile_to_instrs(value_expr, cur_si, &nenv));
+                    let bind_instrs = compile_to_instrs(value_expr, cur_si, &nenv)?;
+                    result.extend(bind_instrs);
                     result.push(Instr::IMov(
                         Val::RegOffset(Reg::RSP, cur_si),
                         Val::Reg(Reg::RAX),
@@ -188,55 +197,54 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Vec<Instr
                     cur_si += 1;
                 }
             }
-            result.extend(compile_to_instrs(body, cur_si, &nenv));
-            result
+            let body_instrs = compile_to_instrs(&body, cur_si, &nenv)?;
+            result.extend(body_instrs);
+            Ok(result)
         }
         Expr::UnOp(op, e) => {
-            let mut result: Vec<Instr> = Vec::new();
+            let mut result = compile_to_instrs(e, si, env)?;
             match op {
                 Op1::Add1 => {
-                    result.extend(compile_to_instrs(e, si, env));
                     result.push(Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)));
                 }
                 Op1::Sub1 => {
-                    result.extend(compile_to_instrs(e, si, env));
                     result.push(Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)));
                 }
             };
-            result
+            Ok(result)
         }
         Expr::BinOp(op, e1, e2) => {
-            let mut result: Vec<Instr> = Vec::new();
-            result.extend(compile_to_instrs(e1, si, env));
-            result.push(Instr::IMov(
+            let e1_instrs = compile_to_instrs(e1, si, env)?;
+            let concat_instrs = vec![Instr::IMov(
                 Val::RegOffset(Reg::RSP, si),
                 Val::Reg(Reg::RAX),
-            ));
-            result.extend(compile_to_instrs(e2, si + 1, env));
+            )];
+            let e2_instrs = compile_to_instrs(e2, si + 1, env)?;
 
-            match op {
-                Op2::Plus => {
-                    result.push(Instr::IAdd(
-                        Val::Reg(Reg::RAX),
-                        Val::RegOffset(Reg::RSP, si),
-                    ));
-                }
+            let op_instrs = match op {
+                Op2::Plus => vec![Instr::IAdd(
+                    Val::Reg(Reg::RAX),
+                    Val::RegOffset(Reg::RSP, si),
+                )],
                 Op2::Minus => {
-                    result.push(Instr::IMov(
-                        Val::Reg(Reg::RBX),
-                        Val::RegOffset(Reg::RSP, si),
-                    ));
-                    result.push(Instr::ISub(Val::Reg(Reg::RBX), Val::Reg(Reg::RAX)));
-                    result.push(Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RBX)));
+                    vec![
+                        Instr::IMov(Val::Reg(Reg::RBX), Val::RegOffset(Reg::RSP, si)),
+                        Instr::ISub(Val::Reg(Reg::RBX), Val::Reg(Reg::RAX)),
+                        Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RBX)),
+                    ]
                 }
                 Op2::Times => {
-                    result.push(Instr::IMul(
+                    vec![Instr::IMul(
                         Val::Reg(Reg::RAX),
                         Val::RegOffset(Reg::RSP, si),
-                    ));
+                    )]
                 }
             };
-            result
+            let mut result = e1_instrs;
+            result.extend(concat_instrs);
+            result.extend(e2_instrs);
+            result.extend(op_instrs);
+            Ok(result)
         }
     }
 }
@@ -252,23 +260,32 @@ fn main() -> std::io::Result<()> {
     let mut in_file = File::open(in_name)?;
     in_file.read_to_string(&mut in_contents)?;
 
-    if let Ok(sexpr) = parse(&in_contents) {
-        let expr = parse_expr(&sexpr);
-        let result = compile(&expr);
-        let asm_program = vec![
-            "section .text",
-            "global our_code_starts_here",
-            "our_code_starts_here:",
-            &result,
-            "ret",
-        ]
-        .join("\n");
+    match parse(&in_contents) {
+        Ok(sexpr) => match parse_expr(&sexpr) {
+            Ok(expr) => {
+                let result = compile(&expr);
+                let asm_program = vec![
+                    "section .text",
+                    "global our_code_starts_here",
+                    "our_code_starts_here:",
+                    &result,
+                    "ret",
+                ]
+                .join("\n");
 
-        let mut out_file = File::create(out_name)?;
-        out_file.write_all(asm_program.as_bytes())?;
+                let mut out_file = File::create(out_name)?;
+                out_file.write_all(asm_program.as_bytes())?;
 
-        Ok(())
-    } else {
-        panic!("Invalid")
+                Ok(())
+            }
+            Err(msg) => {
+                println!("Parse Error: {}", msg);
+                panic!("Invalid")
+            }
+        },
+        Err(msg) => {
+            println!("Sexpr Error: {}", msg);
+            panic!("Invalid")
+        }
     }
 }
