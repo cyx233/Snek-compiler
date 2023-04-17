@@ -156,6 +156,22 @@ impl Instr {
     }
 }
 
+fn generate_expr(s: &String) -> Expr {
+    match parse(s) {
+        Ok(sexpr) => match parse_expr(&sexpr) {
+            Ok(expr) => expr,
+            Err(msg) => {
+                println!("Parse Error: {}", msg);
+                panic!("Invalid")
+            }
+        },
+        Err(msg) => {
+            println!("Sexpr Error: {}", msg);
+            panic!("Invalid")
+        }
+    }
+}
+
 fn compile(e: &Expr) -> String {
     match compile_to_instrs(e, 2, &HashMap::new()) {
         Ok(instrs) => instrs
@@ -255,37 +271,24 @@ fn main() -> std::io::Result<()> {
     let in_name = &args[1];
     let out_name = &args[2];
 
-    // You will make result hold the result of actually compiling
     let mut in_contents = String::new();
     let mut in_file = File::open(in_name)?;
     in_file.read_to_string(&mut in_contents)?;
 
-    match parse(&in_contents) {
-        Ok(sexpr) => match parse_expr(&sexpr) {
-            Ok(expr) => {
-                let result = compile(&expr);
-                let asm_program = vec![
-                    "section .text",
-                    "global our_code_starts_here",
-                    "our_code_starts_here:",
-                    &result,
-                    "ret",
-                ]
-                .join("\n");
+    let expr = generate_expr(&in_contents);
+    let result = compile(&expr);
 
-                let mut out_file = File::create(out_name)?;
-                out_file.write_all(asm_program.as_bytes())?;
+    let asm_program = vec![
+        "section .text",
+        "global our_code_starts_here",
+        "our_code_starts_here:",
+        &result,
+        "ret",
+    ]
+    .join("\n");
 
-                Ok(())
-            }
-            Err(msg) => {
-                println!("Parse Error: {}", msg);
-                panic!("Invalid")
-            }
-        },
-        Err(msg) => {
-            println!("Sexpr Error: {}", msg);
-            panic!("Invalid")
-        }
-    }
+    let mut out_file = File::create(out_name)?;
+    out_file.write_all(asm_program.as_bytes())?;
+
+    Ok(())
 }
