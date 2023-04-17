@@ -156,33 +156,6 @@ impl Instr {
     }
 }
 
-fn generate_expr(s: &String) -> Expr {
-    match parse(s) {
-        Ok(sexpr) => match parse_expr(&sexpr) {
-            Ok(expr) => expr,
-            Err(msg) => {
-                println!("Parse Error: {}", msg);
-                panic!("Invalid")
-            }
-        },
-        Err(msg) => {
-            println!("Sexpr Error: {}", msg);
-            panic!("Invalid")
-        }
-    }
-}
-
-fn compile(e: &Expr) -> String {
-    match compile_to_instrs(e, 2, &HashMap::new()) {
-        Ok(instrs) => instrs
-            .iter()
-            .map(|instr| instr.to_string())
-            .collect::<Vec<String>>()
-            .join("\n"),
-        Err(msg) => panic!("{}", msg),
-    }
-}
-
 fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Vec<Instr>, String> {
     match e {
         Expr::Number(n) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))]),
@@ -262,6 +235,33 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
             result.extend(op_instrs);
             Ok(result)
         }
+    }
+}
+
+fn generate_expr(s: &String) -> Expr {
+    match parse(s) {
+        Ok(sexpr) => match parse_expr(&sexpr) {
+            Ok(expr) => expr,
+            Err(msg) => {
+                println!("Parse Error: {}", msg);
+                panic!("Invalid")
+            }
+        },
+        Err(msg) => {
+            println!("Sexpr Error: {}", msg);
+            panic!("Invalid")
+        }
+    }
+}
+
+fn compile(e: &Expr) -> String {
+    match compile_to_instrs(e, 2, &HashMap::new()) {
+        Ok(instrs) => instrs
+            .iter()
+            .map(|instr| instr.to_string())
+            .collect::<Vec<String>>()
+            .join("\n"),
+        Err(msg) => panic!("{}", msg),
     }
 }
 
