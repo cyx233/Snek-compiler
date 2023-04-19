@@ -1,18 +1,19 @@
-.PRECIOUS: test/%.s
-SNEK_FILES := $(wildcard test/*.snek)
-RUN_TARGETS := $(patsubst test/%.snek,test/%.run,$(SNEK_FILES))
+UNAME := $(shell uname)
 
-.PHONY: all
-all: $(RUN_TARGETS)
+ifeq ($(UNAME), Linux)
+ARCH := elf64
+endif
+ifeq ($(UNAME), Darwin)
+ARCH := macho64
+endif
 
-test/%.s: test/%.snek src/main.rs
-	cargo run -- $< test/$*.s
+tests/%.s: tests/%.snek src/main.rs
+	cargo run -- $< tests/$*.s
 
-test/%.run: test/%.s runtime/start.rs
-	nasm -f elf64 test/$*.s -o runtime/our_code.o
-	ar rcs runtime/libour_code.a runtime/our_code.o
-	rustc -L runtime/ runtime/start.rs -o test/$*.run
+tests/%.run: tests/%.s runtime/start.rs
+	nasm -f $(ARCH) tests/$*.s -o tests/$*.o
+	ar rcs tests/lib$*.a tests/$*.o
+	rustc -L tests/ -lour_code:$* runtime/start.rs -o tests/$*.run
 
-.PHONY: clean
 clean:
-	rm -rf test/*.run test/*.s runtime/*.a runtime/*.o
+	rm -f tests/*.a tests/*.s tests/*.run tests/*.o
