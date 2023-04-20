@@ -92,7 +92,11 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
         Sexp::Atom(I(n)) => i32::try_from(*n)
             .map(Expr::Number)
             .map_err(|e| e.to_string()),
-        Sexp::Atom(S(id)) => Ok(Expr::Id(id.clone())),
+        Sexp::Atom(S(id)) => match id {
+            "true" => Ok(Expr::Boolean(true)),
+            "false" => Ok(Expr::Boolean(false)),
+            _ => Ok(Expr::Id(id.clone())),
+        },
         Sexp::List(vec) => match &vec[..] {
             // (let, <bindings>, <expr>) => Let
             [Sexp::Atom(S(op)), e1, e2] if op == "let" => match e1 {
@@ -107,12 +111,31 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                 Sexp::List(bindings) if bindings.is_empty() => Err("empty binding".to_string()),
                 _ => Err("Bad Sytax: Let".to_string()),
             },
+            // set! <name> <expr> => Set
+            [Sexp::Atom(S(op)), Sexp::Atom(S(name)), e] if op == "set!" => {
+                unimplemented!("parse Set")
+            }
+            // if <expr> <expr> <expr> => If
+            [Sexp::Atom(S(op)), cond, if_expr, else_expr] if op == "if" => {
+                unimplemented!("parse If")
+            }
+            [Sexp::Atom(S(op)), e] if op == "block" => {
+                unimplemented!("parse Block")
+            }
+            [Sexp::Atom(S(op)), e] if op == "loop" => {
+                unimplemented!("parse Loop")
+            }
+            [Sexp::Atom(S(op)), e] if op == "break" => {
+                unimplemented!("parse Break")
+            }
             // (<op>, <expr>) => UnOp
             [Sexp::Atom(S(op)), e] => {
                 let e_instrs = parse_expr(e)?;
                 match op.as_str() {
                     "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_instrs))),
                     "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_instrs))),
+                    "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_instrs))),
+                    "isbool" => Ok(Expr::UnOp(Op1::IsBool, Box::new(e_instrs))),
                     _ => Err(format!("Unknow operator {}", op)),
                 }
             }
@@ -122,6 +145,11 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     "+" => Op2::Plus,
                     "-" => Op2::Minus,
                     "*" => Op2::Times,
+                    ">" => Op2::Greater,
+                    "<" => Op2::Less,
+                    ">=" => Op2::GreaterEqual,
+                    "<=" => Op2::LessEqual,
+                    "=" => Op2::Equal,
                     _ => return Err(format!("Unknow operator {}", op)),
                 };
                 let e1_instrs = parse_expr(e1)?;
@@ -171,9 +199,10 @@ impl Instr {
 
 fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Vec<Instr>, String> {
     match e {
-        Expr::Number(n) => {
-            unimplemented!("Number")
-        }
+        Expr::Number(n) => Ok(vec![Instr::IMov(
+            Val::Reg(Reg::RAX),
+            Val::Imm(i64::from(*n)),
+        )]),
         Expr::Boolean(b) => {
             unimplemented!("Boolean")
         }
