@@ -2,20 +2,43 @@ mod infra;
 
 // Your tests go here!
 success_tests! {
-    add1: "73",
-    add: "15",
-    nested_arith: "25",
-    binding: "5",
-    quick_brown_fox:"27",
-    negative:"-5",
-    let_arith:"9",
-    nested_let:"11"
+    {
+        name: false_val,
+        file: "false_val.snek",
+        expected: "false",
+    },
+    {
+        name: input_compare_1,
+        file: "input_compare.snek",
+        input: "2",
+        expected: "false",
+    },
+    {
+        name: input_compare_2,
+        file: "input_compare.snek",
+        input: "10",
+        expected: "true",
+    },
 }
 
-failure_tests! {
-    unbound_id: "Unbound variable identifier x",
-    duplicate_binding: "Duplicate binding",
-    bad_parse: "Invalid",
-    bad_prog: "Invalid",
-    bad_id:"Invalid",
+runtime_error_tests! {
+    {
+        name: invalid_argument,
+        file: "invalid_argument.snek",
+        expected: "invalid argument",
+    },
+    {
+        name: input_compare_3,
+        file: "input_compare.snek",
+        input: "true",
+        expected: "invalid argument",
+    },
+}
+
+static_error_tests! {
+    {
+        name: number_bounds_fail,
+        file: "number_bounds_fail.snek",
+        expected: "Invalid",
+    }
 }

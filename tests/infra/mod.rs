@@ -3,41 +3,107 @@ use std::{
     process::Command,
 };
 
+pub(crate) enum TestKind {
+    Success,
+    RuntimeError,
+    StaticError,
+}
+
 #[macro_export]
 macro_rules! success_tests {
-    ($($name:ident: $expected:literal),* $(,)?) => {
-        $(
-        #[test]
-        fn $name() {
-            $crate::infra::run_success_test(stringify!($name), $expected);
-        }
-        )*
-    }
+    ($($tt:tt)*) => { $crate::tests!(Success => $($tt)*); }
 }
+
 #[macro_export]
-macro_rules! failure_tests {
-    ($($name:ident: $expected:literal),* $(,)?) => {
+macro_rules! runtime_error_tests {
+    ($($tt:tt)*) => { $crate::tests!(RuntimeError => $($tt)*); }
+}
+
+#[macro_export]
+macro_rules! static_error_tests {
+    ($($tt:tt)*) => { $crate::tests!(StaticError => $($tt)*); }
+}
+
+#[macro_export]
+macro_rules! tests {
+    ($kind:ident =>
         $(
-        #[test]
-        fn $name() {
-            $crate::infra::run_failure_test(stringify!($name), $expected);
-        }
+            {
+                name: $name:ident,
+                file: $file:literal,
+                $(input: $input:literal,)?
+                expected: $expected:literal $(,)?
+                $(" $(tt:$tt)* ")?
+            }
+        ),*
+        $(,)?
+    ) => {
+        $(
+            #[test]
+            fn $name() {
+                #[allow(unused_assignments, unused_mut)]
+                let mut input = None;
+                $(input = Some($input);)?
+                let kind = $crate::infra::TestKind::$kind;
+                $crate::infra::run_test(stringify!($name), $file, input, $expected, kind);
+            }
         )*
+    };
+}
+
+pub(crate) fn run_test(
+    name: &str,
+    file: &str,
+    input: Option<&str>,
+    expected: &str,
+    kind: TestKind,
+) {
+    let file = Path::new("tests").join(file);
+    match kind {
+        TestKind::Success => run_success_test(name, &file, expected, input),
+        TestKind::RuntimeError => run_runtime_error_test(name, &file, expected, input),
+        TestKind::StaticError => run_static_error_test(name, &file, expected),
     }
 }
 
-fn compile(name: &str) -> Result<(), String> {
-    // Build the project
-    let status = Command::new("cargo")
-        .arg("build")
-        .status()
-        .expect("could not run cargo");
-    assert!(status.success(), "could not build the project");
+fn run_success_test(name: &str, file: &Path, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name, file) {
+        panic!("expected a successful compilation, but got an error: `{err}`");
+    }
+    match run(name, input) {
+        Err(err) => {
+            panic!("expected a successful execution, but got an error: `{err}`");
+        }
+        Ok(actual_output) => {
+            diff(expected, actual_output);
+        }
+    }
+}
 
+fn run_runtime_error_test(name: &str, file: &Path, expected: &str, input: Option<&str>) {
+    if let Err(err) = compile(name, file) {
+        panic!("expected a successful compilation, but got an error: `{err}`");
+    }
+    match run(name, input) {
+        Ok(out) => {
+            panic!("expected a runtime error, but program executed succesfully: `{out}`");
+        }
+        Err(err) => check_error_msg(&err, expected),
+    }
+}
+
+fn run_static_error_test(name: &str, file: &Path, expected: &str) {
+    match compile(name, file) {
+        Ok(()) => panic!("expected a failure, but compilation succeeded"),
+        Err(err) => check_error_msg(&err, expected),
+    }
+}
+
+fn compile(name: &str, file: &Path) -> Result<(), String> {
     // Run the compiler
-    let boa: PathBuf = ["target", "debug", "boa"].iter().collect();
-    let output = Command::new(&boa)
-        .arg(&mk_path(name, Ext::Snek))
+    let compiler: PathBuf = ["target", "debug", env!("CARGO_PKG_NAME")].iter().collect();
+    let output = Command::new(&compiler)
+        .arg(file)
         .arg(&mk_path(name, Ext::Asm))
         .output()
         .expect("could not run the compiler");
@@ -55,40 +121,35 @@ fn compile(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn run_success_test(name: &str, expected: &str) {
-    if let Err(err) = compile(name) {
-        panic!(
-            "expected a successful compilation, but got an error: `{}`",
-            err
-        );
+fn run(name: &str, input: Option<&str>) -> Result<String, String> {
+    let mut cmd = Command::new(&mk_path(name, Ext::Run));
+    if let Some(input) = input {
+        cmd.arg(input);
     }
+    let output = cmd.output().unwrap();
+    if output.status.success() {
+        Ok(String::from_utf8(output.stdout).unwrap().trim().to_string())
+    } else {
+        Err(String::from_utf8(output.stderr).unwrap().trim().to_string())
+    }
+}
 
-    let output = Command::new(&mk_path(name, Ext::Run)).output().unwrap();
+fn check_error_msg(found: &str, expected: &str) {
     assert!(
-        output.status.success(),
-        "unexpected error when running the compiled program: `{}`",
-        std::str::from_utf8(&output.stderr).unwrap(),
+        found.contains(expected.trim()),
+        "the reported error message does not match",
     );
-    let actual_output = String::from_utf8(output.stdout).unwrap();
-    let actual_output = actual_output.trim();
+}
+
+fn diff(expected: &str, actual_output: String) {
     let expected_output = expected.trim();
     if expected_output != actual_output {
         eprintln!(
             "output differed!\n{}",
-            prettydiff::diff_lines(actual_output, expected_output)
+            prettydiff::diff_lines(&actual_output, expected_output)
         );
         panic!("test failed");
     }
-}
-
-pub(crate) fn run_failure_test(name: &str, expected: &str) {
-    let Err(actual_err) = compile(name) else {
-        panic!("expected a failure, but compilation succeeded");
-    };
-    assert!(
-        actual_err.contains(expected.trim()),
-        "the reported error message does not match",
-    );
 }
 
 fn mk_path(name: &str, ext: Ext) -> PathBuf {
@@ -97,7 +158,6 @@ fn mk_path(name: &str, ext: Ext) -> PathBuf {
 
 #[derive(Copy, Clone)]
 enum Ext {
-    Snek,
     Asm,
     Run,
 }
@@ -105,7 +165,6 @@ enum Ext {
 impl std::fmt::Display for Ext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Ext::Snek => write!(f, "snek"),
             Ext::Asm => write!(f, "s"),
             Ext::Run => write!(f, "run"),
         }

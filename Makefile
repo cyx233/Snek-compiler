@@ -15,5 +15,10 @@ tests/%.run: tests/%.s runtime/start.rs
 	ar rcs tests/lib$*.a tests/$*.o
 	rustc -L tests/ -lour_code:$* runtime/start.rs -o tests/$*.run
 
+.PHONY: test
+test:
+	cargo build
+	cargo test
+
 clean:
 	rm -f tests/*.a tests/*.s tests/*.run tests/*.o
