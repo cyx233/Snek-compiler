@@ -91,8 +91,8 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
         Sexp::Atom(I(n)) => i32::try_from(*n)
             .map(Expr::Number)
-            .map_err(|e| e.to_string()),
-        Sexp::Atom(S(id)) => match id {
+            .map_err(|e| "Number overflow"),
+        Sexp::Atom(S(id)) => match id.as_str() {
             "true" => Ok(Expr::Boolean(true)),
             "false" => Ok(Expr::Boolean(false)),
             _ => Ok(Expr::Id(id.clone())),
@@ -112,26 +112,38 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                 _ => Err("Bad Sytax: Let".to_string()),
             },
             // set! <name> <expr> => Set
-            [Sexp::Atom(S(op)), Sexp::Atom(S(name)), e] if op == "set!" => {
-                unimplemented!("parse Set")
+            [Sexp::Atom(S(op)), Sexp::Atom(S(id)), e] if op == "set!" => {
+                let e_instrs = parse_expr(e)?;
+                Ok(Expr::Set(id.clone(), Box::new(e_instrs)))
             }
             // if <expr> <expr> <expr> => If
-            [Sexp::Atom(S(op)), cond, if_expr, else_expr] if op == "if" => {
-                unimplemented!("parse If")
+            [Sexp::Atom(S(op)), cond, if_sexp, else_sexp] if op == "if" => {
+                let cond_expr = parse_expr(cond)?;
+                let if_expr = parse_expr(if_sexp)?;
+                let else_expr = parse_expr(else_sexp)?;
+                Ok(Expr::If(
+                    Box::new(cond_expr),
+                    Box::new(if_expr),
+                    Box::new(else_expr),
+                ))
             }
-            [Sexp::Atom(S(op)), e] if op == "block" => {
-                unimplemented!("parse Block")
-            }
-            [Sexp::Atom(S(op)), e] if op == "loop" => {
-                unimplemented!("parse Loop")
-            }
-            [Sexp::Atom(S(op)), e] if op == "break" => {
-                unimplemented!("parse Break")
-            }
-            // (<op>, <expr>) => UnOp
+            // (<op>, <expr>) => Block, Loop, Break, UnOp
             [Sexp::Atom(S(op)), e] => {
                 let e_instrs = parse_expr(e)?;
                 match op.as_str() {
+                    "block" => {
+                        if let Sexp::List(vec) = e {
+                            let e_instrs = vec
+                                .iter()
+                                .map(parse_expr)
+                                .collect::<Result<Vec<Expr>, String>>()?;
+                            Ok(Expr::Block(e_instrs))
+                        } else {
+                            Err(format!("Block Parse Error"))
+                        }
+                    }
+                    "loop" => Ok(Expr::Loop(Box::new(e_instrs))),
+                    "break" => Ok(Expr::Break(Box::new(e_instrs))),
                     "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_instrs))),
                     "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_instrs))),
                     "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_instrs))),
