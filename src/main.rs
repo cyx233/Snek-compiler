@@ -16,7 +16,7 @@ lazy_static! {
 #[derive(Debug)]
 enum Val {
     Reg(Reg),
-    Imm(i32),
+    Imm(i64),
     RegOffset(Reg, i32),
 }
 
@@ -39,6 +39,8 @@ enum Instr {
 enum Op1 {
     Add1,
     Sub1,
+    IsNum,
+    IsBool,
 }
 
 #[derive(Debug)]
@@ -46,15 +48,26 @@ enum Op2 {
     Plus,
     Minus,
     Times,
+    Equal,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 }
 
 #[derive(Debug)]
 enum Expr {
     Number(i32),
+    Boolean(bool),
     Id(String),
     Let(Vec<(String, Expr)>, Box<Expr>),
     UnOp(Op1, Box<Expr>),
     BinOp(Op2, Box<Expr>, Box<Expr>),
+    If(Box<Expr>, Box<Expr>, Box<Expr>),
+    Loop(Box<Expr>),
+    Break(Box<Expr>),
+    Set(String, Box<Expr>),
+    Block(Vec<Expr>),
 }
 
 fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
@@ -158,7 +171,12 @@ impl Instr {
 
 fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Vec<Instr>, String> {
     match e {
-        Expr::Number(n) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))]),
+        Expr::Number(n) => {
+            unimplemented!("Number")
+        }
+        Expr::Boolean(b) => {
+            unimplemented!("Boolean")
+        }
         Expr::Id(id) => match env.get(id) {
             Some(n) => Ok(vec![Instr::IMov(
                 Val::Reg(Reg::RAX),
@@ -199,6 +217,12 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
                 Op1::Sub1 => {
                     result.push(Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)));
                 }
+                Op1::IsNum => {
+                    unimplemented!("IsNum")
+                }
+                Op1::IsBool => {
+                    unimplemented!("IsBool")
+                }
             };
             Ok(result)
         }
@@ -228,12 +252,42 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
                         Val::RegOffset(Reg::RSP, si),
                     )]
                 }
+                Op2::Equal => {
+                    unimplemented!("Equal")
+                }
+                Op2::Greater => {
+                    unimplemented!("Greater")
+                }
+                Op2::GreaterEqual => {
+                    unimplemented!("GreaterEqual")
+                }
+                Op2::Less => {
+                    unimplemented!("Less")
+                }
+                Op2::LessEqual => {
+                    unimplemented!("LessEqual")
+                }
             };
             let mut result = e1_instrs;
             result.extend(concat_instrs);
             result.extend(e2_instrs);
             result.extend(op_instrs);
             Ok(result)
+        }
+        Expr::If(cond, if_expr, else_expr) => {
+            unimplemented!("If")
+        }
+        Expr::Loop(e) => {
+            unimplemented!("Loop")
+        }
+        Expr::Break(e) => {
+            unimplemented!("Break")
+        }
+        Expr::Set(id, e) => {
+            unimplemented!("Set")
+        }
+        Expr::Block(expr_vec) => {
+            unimplemented!("Block")
         }
     }
 }
