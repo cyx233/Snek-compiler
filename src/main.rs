@@ -452,7 +452,7 @@ fn compile_to_instrs(
                     ),
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    // Instr::JumpIf("err_test3".to_string(), CondFlag::NotZero),
+                    Instr::JumpIf("err_test3".to_string(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                 ],
                 // Only accept int
@@ -632,7 +632,7 @@ fn main() -> std::io::Result<()> {
         "err_test2:",
         "\tmov rdi,4\n\tjmp snek_error",
         "err_test3:",
-        "\tmov rdi,5\n\tjmp snek_error",
+        "\tmov rdi,rcx\n\tjmp snek_error",
         "err_test4:",
         "\tmov rdi,6\n\tjmp snek_error",
         "err_test5:",
