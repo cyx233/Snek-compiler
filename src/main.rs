@@ -29,6 +29,7 @@ enum Val {
 enum Reg {
     RAX,
     RCX,
+    RDI,
     RSP,
 }
 
@@ -104,6 +105,7 @@ enum Expr {
     Break(Box<Expr>),
     Set(String, Box<Expr>),
     Block(Vec<Expr>),
+    Input,
 }
 
 fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
@@ -126,7 +128,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
                         | "isnum"
                         | "isbool"
                 ) {
-                    Err(format!("Invalid ID: can't be a keyword \"{}\"", id))
+                    Err(format!("Invalid Id: can't be a keyword \"{}\"", id))
                 } else if ID_REGEX.is_match(id) {
                     let e_instrs = parse_expr(e)?;
                     Ok((id.clone(), e_instrs))
@@ -152,6 +154,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
         Sexp::Atom(S(id)) => match id.as_str() {
             "true" => Ok(Expr::Boolean(true)),
             "false" => Ok(Expr::Boolean(false)),
+            "input" => Ok(Expr::Input),
             _ => Ok(Expr::Id(id.clone())),
         },
         Sexp::List(vec) => match &vec[..] {
@@ -243,6 +246,7 @@ impl Reg {
         match self {
             Reg::RAX => "rax".to_string(),
             Reg::RCX => "rcx".to_string(),
+            Reg::RDI => "rdi".to_string(),
             Reg::RSP => "rsp".to_string(),
         }
     }
@@ -345,6 +349,7 @@ fn compile_to_instrs(
     match e {
         Expr::Number(n) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))]),
         Expr::Boolean(b) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Boolean(*b))]),
+        Expr::Input => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RDI))]),
         Expr::Id(id) => match env.get(id) {
             Some(n) => Ok(vec![Instr::IMov(
                 Val::Reg(Reg::RAX),
@@ -577,9 +582,8 @@ fn generate_expr(s: &String) -> Expr {
 
 fn compile(e: &Expr) -> String {
     let mut l = 0;
-    let mut env = HashMap::new();
-    env.insert("input".to_string(), 2);
-    match compile_to_instrs(e, 3, &env, &mut l, &"".to_string()) {
+    let env = HashMap::new();
+    match compile_to_instrs(e, 2, &env, &mut l, &"".to_string()) {
         Ok(instrs) => instrs
             .iter()
             .map(|instr| instr.to_string())
@@ -616,7 +620,6 @@ fn main() -> std::io::Result<()> {
         &(ERR_INVALID_ARG_LABEL.clone() + ":"),
         &invalid_arg_instr,
         "our_code_starts_here:",
-        "\tmov [rsp-16],rdi",
         &result,
         "\tret",
     ]
