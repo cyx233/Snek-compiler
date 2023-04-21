@@ -12,11 +12,10 @@ extern "C" {
 #[export_name = "\x01snek_error"]
 pub extern "C" fn snek_error(errcode: i64) {
     // TODO: print error message according to writeup
-    let err = errcode >> 1;
-    match err {
+    match errcode {
         1 => eprintln!("invalid argument"),
         2 => eprintln!("overflow"),
-        _ => eprintln!("Unknown Error {err}"),
+        _ => eprintln!("Unknown Error {errcode}"),
     }
     std::process::exit(1);
 }

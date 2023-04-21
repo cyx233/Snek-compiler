@@ -613,12 +613,9 @@ fn main() -> std::io::Result<()> {
     let expr = generate_expr(&in_contents);
     let result = compile(&expr);
 
-    let invalid_arg_instr = format!(
-        "\tmov rdi,{}\n\tjmp snek_error",
-        (*ERR_INVALID_ARG_CODE) << 1
-    );
+    let invalid_arg_instr = format!("\tmov rdi,{}\n\tjmp snek_error", *ERR_INVALID_ARG_CODE);
 
-    let overflow_intrs = format!("\tmov rdi,{}\n\tjmp snek_error", (*ERR_OVERFLOW_CODE) << 1);
+    let overflow_intrs = format!("\tmov rdi,{}\n\tjmp snek_error", *ERR_OVERFLOW_CODE);
 
     let asm_program = vec![
         "section .text",
