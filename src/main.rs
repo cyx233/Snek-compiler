@@ -452,6 +452,7 @@ fn compile_to_instrs(
                     ),
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
+                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
                     Instr::JumpIf("err_test3".to_string(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                 ],
