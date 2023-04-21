@@ -452,7 +452,7 @@ fn compile_to_instrs(
                     ),
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    Instr::JumpIf("err_test3".to_string(), CondFlag::NotZero),
+                    // Instr::JumpIf("err_test3".to_string(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                 ],
                 // Only accept int
@@ -622,9 +622,7 @@ fn main() -> std::io::Result<()> {
         "section .text",
         "extern snek_error",
         "global our_code_starts_here",
-        "our_code_starts_here:",
-        &result,
-        "\tret",
+        "overflow:",
         &(ERR_OVERFLOW_LABEL.clone() + ":"),
         &overflow_intrs,
         &(ERR_INVALID_ARG_LABEL.clone() + ":"),
@@ -639,6 +637,9 @@ fn main() -> std::io::Result<()> {
         "\tmov rdi,6\n\tjmp snek_error",
         "err_test5:",
         "\tmov rdi,7\n\tjmp snek_error",
+        "our_code_starts_here:",
+        &result,
+        "\tret",
     ]
     .join("\n");
 
