@@ -384,16 +384,14 @@ fn compile_to_instrs(
                 Op1::Add1 => {
                     vec![
                         Instr::TypeTest(Reg::RAX),
-                        // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                        Instr::JumpIf("err_test1".to_string(), CondFlag::NotZero),
+                        Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                         Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)),
                     ]
                 }
                 Op1::Sub1 => {
                     vec![
                         Instr::TypeTest(Reg::RAX),
-                        // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                        Instr::JumpIf("err_test2".to_string(), CondFlag::NotZero),
+                        Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                         Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)),
                     ]
                 }
@@ -451,20 +449,16 @@ fn compile_to_instrs(
                         CondFlag::Zero,
                     ),
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
-                    Instr::JumpIf("err_test3".to_string(), CondFlag::NotZero),
+                    Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                 ],
                 // Only accept int
                 _ => vec![
                     Instr::TypeTest(Reg::RAX),
-                    // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    Instr::JumpIf("err_test4".to_string(), CondFlag::NotZero),
+                    Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RCX), Val::RegOffset(Reg::RSP, si)),
                     Instr::TypeTest(Reg::RCX),
-                    // Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    Instr::JumpIf("err_test5".to_string(), CondFlag::NotZero),
+                    Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                 ],
             };
             let op_instrs = match op {
