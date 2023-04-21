@@ -632,7 +632,7 @@ fn main() -> std::io::Result<()> {
         "err_test2:",
         "\tmov rdi,4\n\tjmp snek_error",
         "err_test3:",
-        "\tmov rdi,rcx\n\tjmp snek_error",
+        "\tmov rdi,rax\n\tjmp snek_error",
         "err_test4:",
         "\tmov rdi,6\n\tjmp snek_error",
         "err_test5:",
