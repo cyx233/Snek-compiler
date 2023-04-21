@@ -126,17 +126,17 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
                         | "isnum"
                         | "isbool"
                 ) {
-                    Err(format!("Id can't be a keyword \"{}\"", id))
+                    Err(format!("Invalid Id: can't be a keyword \"{}\"", id))
                 } else if ID_REGEX.is_match(id) {
                     let e_instrs = parse_expr(e)?;
                     Ok((id.clone(), e_instrs))
                 } else {
-                    Err(format!("Invalid ID {}", id))
+                    Err(format!("Invalid ID: {}", id))
                 }
             }
-            _ => Err("bad bind".to_string()),
+            _ => Err("Invalid id-expr in binding".to_string()),
         },
-        _ => Err("bindings are not a List".to_string()),
+        _ => Err("Invalid bindings list".to_string()),
     }
 }
 
