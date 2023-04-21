@@ -114,18 +114,19 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
                     id.as_str(),
                     "true"
                         | "false"
-                        | "block"
+                        | "input"
                         | "let"
+                        | "set!"
                         | "if"
+                        | "block"
                         | "loop"
+                        | "break"
                         | "add1"
                         | "sub1"
                         | "isnum"
                         | "isbool"
-                        | "input"
-                        | "set!"
                 ) {
-                    Err(format!("id can't be a keyword \"{}\"", id))
+                    Err(format!("Id can't be a keyword \"{}\"", id))
                 } else if ID_REGEX.is_match(id) {
                     let e_instrs = parse_expr(e)?;
                     Ok((id.clone(), e_instrs))
@@ -135,7 +136,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
             }
             _ => Err("bad bind".to_string()),
         },
-        _ => Err("bindings is not a List".to_string()),
+        _ => Err("bindings are not a List".to_string()),
     }
 }
 
@@ -567,7 +568,7 @@ fn generate_expr(s: &String) -> Expr {
             }
         },
         Err(msg) => {
-            panic!("Sexpr Failed. {}", msg)
+            panic!("Invalid Sexpr. {}", msg)
         }
     }
 }
