@@ -127,7 +127,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
 fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
         Sexp::Atom(I(n)) => {
-            if *n < -4611686018427387904 || *n > 4611686018427387903 {
+            if (*n < -4611686018427387904 || *n > 4611686018427387903) {
                 Err("overflow".to_string())
             } else {
                 Ok(Expr::Number(*n))
@@ -386,7 +386,7 @@ fn compile_to_instrs(
                         Reg::RAX,
                         Val::Boolean(true),
                         Val::Boolean(false),
-                        CondFlag::NotZero,
+                        CondFlag::Zero,
                     ),
                 ],
                 Op1::IsBool => vec![
@@ -395,7 +395,7 @@ fn compile_to_instrs(
                         Reg::RAX,
                         Val::Boolean(true),
                         Val::Boolean(false),
-                        CondFlag::Zero,
+                        CondFlag::NotZero,
                     ),
                 ],
             };
