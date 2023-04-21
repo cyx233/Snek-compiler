@@ -110,7 +110,23 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
     match s {
         Sexp::List(vec) => match &vec[..] {
             [Sexp::Atom(S(id)), e] => {
-                if ID_REGEX.is_match(id) {
+                if matches!(
+                    id.as_str(),
+                    "true"
+                        | "false"
+                        | "block"
+                        | "let"
+                        | "if"
+                        | "loop"
+                        | "add1"
+                        | "sub1"
+                        | "isnum"
+                        | "isbool"
+                        | "input"
+                        | "set!"
+                ) {
+                    Err(format!("id can't be a keyword \"{}\"", id))
+                } else if ID_REGEX.is_match(id) {
                     let e_instrs = parse_expr(e)?;
                     Ok((id.clone(), e_instrs))
                 } else {
@@ -127,7 +143,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
         Sexp::Atom(I(n)) => {
             if *n < -4611686018427387904 || *n > 4611686018427387903 {
-                Err("overflow".to_string())
+                Err("Invalid number".to_string())
             } else {
                 Ok(Expr::Number(*n))
             }
@@ -147,7 +163,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                 if !result.is_empty() {
                     Ok(Expr::Block(result))
                 } else {
-                    Err("Empty Block".to_string())
+                    Err("Invalid Syntax: empty Block".to_string())
                 }
             }
             // (let, <bindings>, <expr>) => Let
@@ -161,7 +177,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Ok(Expr::Let(env, Box::new(body)))
                 }
                 Sexp::List(bindings) if bindings.is_empty() => Err("empty binding".to_string()),
-                _ => Err("Bad Sytax: Let".to_string()),
+                _ => Err("Invalid Sytax: Let".to_string()),
             },
             // set! <name> <expr> => Set
             [Sexp::Atom(S(op)), Sexp::Atom(S(id)), e] if op == "set!" => {
@@ -189,7 +205,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_instrs))),
                     "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_instrs))),
                     "isbool" => Ok(Expr::UnOp(Op1::IsBool, Box::new(e_instrs))),
-                    _ => Err(format!("Unknow operator {}", op)),
+                    _ => Err(format!("Invalid operator {}", op)),
                 }
             }
             // (<op>, <expr>, <expr>) => BinOp
@@ -203,7 +219,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     ">=" => Op2::GreaterEqual,
                     "<=" => Op2::LessEqual,
                     "=" => Op2::Equal,
-                    _ => return Err(format!("Unknow operator {}", op)),
+                    _ => return Err(format!("Invalid operator {}", op)),
                 };
                 let e1_instrs = parse_expr(e1)?;
                 let e2_instrs = parse_expr(e2)?;
@@ -213,9 +229,9 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(e2_instrs),
                 ))
             }
-            _ => Err("Bad Syntax: Sexp::List".to_string()),
+            _ => Err("Invalid Syntax: Sexp::List".to_string()),
         },
-        _ => Err("Bad Syntax: Sexp".to_string()),
+        _ => Err("Invalid Syntax: Sexp".to_string()),
     }
 }
 
@@ -341,21 +357,6 @@ fn compile_to_instrs(
             for (id, value_expr) in bindings {
                 if cur_env.contains_key(id) {
                     return Err("Duplicate binding".to_string());
-                } else if matches!(
-                    id.as_str(),
-                    "true"
-                        | "false"
-                        | "block"
-                        | "let"
-                        | "if"
-                        | "loop"
-                        | "add1"
-                        | "sub1"
-                        | "isnum"
-                        | "isbool"
-                        | "input"
-                ) {
-                    return Err(format!("id can't be a keyword \"{}\"", id));
                 } else {
                     cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
@@ -562,13 +563,11 @@ fn generate_expr(s: &String) -> Expr {
         Ok(sexpr) => match parse_expr(&sexpr) {
             Ok(expr) => expr,
             Err(msg) => {
-                println!("Parse Error: {}", msg);
-                panic!("Invalid")
+                panic!("Parse Failed. {}", msg)
             }
         },
         Err(msg) => {
-            println!("Sexpr Error: {}", msg);
-            panic!("Invalid")
+            panic!("Sexpr Failed. {}", msg)
         }
     }
 }
@@ -583,7 +582,7 @@ fn compile(e: &Expr) -> String {
             .map(|instr| instr.to_string())
             .collect::<Vec<String>>()
             .join("\n"),
-        Err(msg) => panic!("{}", msg),
+        Err(msg) => panic!("Compile Failed. {}", msg),
     }
 }
 
