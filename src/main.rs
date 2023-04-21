@@ -11,9 +11,9 @@ use regex::Regex;
 
 lazy_static! {
     static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-    static ref ERR_INVALID_ARG_LABEL: String = "invalid_code".to_string();
+    static ref ERR_INVALID_ARG_LABEL: String = "invalid_label_0".to_string();
     static ref ERR_INVALID_ARG_CODE: i64 = 1;
-    static ref ERR_OVERFLOW_LABEL: String = "overflow".to_string();
+    static ref ERR_OVERFLOW_LABEL: String = "overflow_label_1".to_string();
     static ref ERR_OVERFLOW_CODE: i64 = 2;
 }
 
@@ -294,7 +294,7 @@ impl Instr {
             Instr::Cmp(v1, v2) => format!("\tcmp {},{}", v1.to_string(), v2.to_string()),
             Instr::SetIfElse(reg, true_v, false_v, cond) => match cond {
                 CondFlag::Always => format!("\tmov {}, {}", reg.to_string(), true_v.to_string()),
-                CondFlag::Never => format!("\tmov {}, {}", reg.to_string(), false_v.to_string()),
+                CondFlag::Never => "".to_string(),
                 _ => format!(
                     "\tmov {},{}\n\tmov rbx,{}\n\t{} {},rbx",
                     reg.to_string(),
@@ -348,7 +348,16 @@ fn compile_to_instrs(
                     return Err("Duplicate binding".to_string());
                 } else if matches!(
                     id.as_str(),
-                    "true" | "false" | "block" | "let" | "if" | "loop"
+                    "true"
+                        | "false"
+                        | "block"
+                        | "let"
+                        | "if"
+                        | "loop"
+                        | "add1"
+                        | "sub1"
+                        | "isnum"
+                        | "isbool"
                 ) {
                     return Err(format!("id can't be a keyword \"{}\"", id));
                 } else {
