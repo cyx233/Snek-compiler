@@ -622,7 +622,8 @@ fn main() -> std::io::Result<()> {
         "section .text",
         "extern snek_error",
         "global our_code_starts_here",
-        "overflow:",
+        &result,
+        "\tret",
         &(ERR_OVERFLOW_LABEL.clone() + ":"),
         &overflow_intrs,
         &(ERR_INVALID_ARG_LABEL.clone() + ":"),
@@ -638,8 +639,6 @@ fn main() -> std::io::Result<()> {
         "err_test5:",
         "\tmov rdi,7\n\tjmp snek_error",
         "our_code_starts_here:",
-        &result,
-        "\tret",
     ]
     .join("\n");
 
