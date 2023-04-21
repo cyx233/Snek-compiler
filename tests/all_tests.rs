@@ -55,6 +55,12 @@ runtime_error_tests! {
         input: "true",
         expected: "invalid argument",
     },
+    {
+        name: overflow,
+        file: "factorial.snek",
+        input: "32",
+        expected: "overflow",
+    },
 }
 
 static_error_tests! {

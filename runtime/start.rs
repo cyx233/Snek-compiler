@@ -15,6 +15,7 @@ pub extern "C" fn snek_error(errcode: i64) {
     let err = errcode >> 1;
     match err {
         1 => eprintln!("invalid argument"),
+        2 => eprintln!("overflow"),
         _ => eprintln!("Unknown Error {err}"),
     }
     std::process::exit(1);
@@ -22,7 +23,6 @@ pub extern "C" fn snek_error(errcode: i64) {
 
 fn parse_input(input: &str) -> i64 {
     // TODO: parse the input string into internal value representation
-    dbg!(input);
     match input {
         "true" => 3,
         "false" => 1,
