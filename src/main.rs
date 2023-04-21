@@ -131,6 +131,18 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             _ => Ok(Expr::Id(id.clone())),
         },
         Sexp::List(vec) => match &vec[..] {
+            // Block
+            [Sexp::Atom(S(op)), ..] if op == "block" => {
+                let result = vec[1..]
+                    .iter()
+                    .map(parse_expr)
+                    .collect::<Result<Vec<Expr>, String>>()?;
+                if !result.is_empty() {
+                    Ok(Expr::Block(result))
+                } else {
+                    Err("Empty Block".to_string())
+                }
+            }
             // (let, <bindings>, <expr>) => Let
             [Sexp::Atom(S(op)), e1, e2] if op == "let" => match e1 {
                 Sexp::List(bindings) if !bindings.is_empty() => {
@@ -164,17 +176,6 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             [Sexp::Atom(S(op)), e] => {
                 let e_instrs = parse_expr(e)?;
                 match op.as_str() {
-                    "block" => {
-                        if let Sexp::List(vec) = e {
-                            let e_instrs = vec
-                                .iter()
-                                .map(parse_expr)
-                                .collect::<Result<Vec<Expr>, String>>()?;
-                            Ok(Expr::Block(e_instrs))
-                        } else {
-                            Err(format!("Block Bad Syntax"))
-                        }
-                    }
                     "loop" => Ok(Expr::Loop(Box::new(e_instrs))),
                     "break" => Ok(Expr::Break(Box::new(e_instrs))),
                     "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_instrs))),
@@ -498,6 +499,7 @@ fn compile_to_instrs(
             let mut result = vec![Instr::Label(loop_label.clone())];
             result.extend(e_instrs);
             result.push(Instr::JumpIf(loop_label.clone(), CondFlag::Always));
+            result.push(Instr::Label(end_label.clone()));
             Ok(result)
         }
         Expr::Break(e) => {
@@ -571,7 +573,6 @@ fn main() -> std::io::Result<()> {
     in_file.read_to_string(&mut in_contents)?;
 
     let expr = generate_expr(&in_contents);
-    dbg!(&expr);
     let result = compile(&expr);
 
     let asm_program = vec![
