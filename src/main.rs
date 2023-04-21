@@ -126,7 +126,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
                         | "isnum"
                         | "isbool"
                 ) {
-                    Err(format!("Invalid Id: can't be a keyword \"{}\"", id))
+                    Err(format!("Invalid ID: can't be a keyword \"{}\"", id))
                 } else if ID_REGEX.is_match(id) {
                     let e_instrs = parse_expr(e)?;
                     Ok((id.clone(), e_instrs))
@@ -134,9 +134,9 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
                     Err(format!("Invalid ID: {}", id))
                 }
             }
-            _ => Err("Invalid id-expr in binding".to_string()),
+            _ => Err("Invalid Syntax: id-expr".to_string()),
         },
-        _ => Err("Invalid bindings list".to_string()),
+        _ => Err("Invalid Syntax: bindings".to_string()),
     }
 }
 
@@ -177,7 +177,9 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     let body = parse_expr(e2)?;
                     Ok(Expr::Let(env, Box::new(body)))
                 }
-                Sexp::List(bindings) if bindings.is_empty() => Err("empty binding".to_string()),
+                Sexp::List(bindings) if bindings.is_empty() => {
+                    Err("Invalid binding: empty".to_string())
+                }
                 _ => Err("Invalid Sytax: Let".to_string()),
             },
             // set! <name> <expr> => Set
