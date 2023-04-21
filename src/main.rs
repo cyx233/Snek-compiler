@@ -390,6 +390,7 @@ fn compile_to_instrs(
                         Instr::TypeTest(Reg::RAX),
                         Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                         Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)),
+                        Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
                 Op1::Sub1 => {
@@ -397,6 +398,7 @@ fn compile_to_instrs(
                         Instr::TypeTest(Reg::RAX),
                         Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                         Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)),
+                        Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
                 Op1::IsNum => vec![
@@ -420,10 +422,6 @@ fn compile_to_instrs(
             };
             let mut result = e_instrs;
             result.extend(op_instrs);
-            result.push(Instr::JumpIf(
-                ERR_OVERFLOW_LABEL.clone(),
-                CondFlag::Overflow,
-            ));
             Ok(result)
         }
         Expr::BinOp(op, e1, e2) => {
@@ -614,7 +612,6 @@ fn main() -> std::io::Result<()> {
         "section .text",
         "extern snek_error",
         "global our_code_starts_here",
-        "overflow:",
         &(ERR_OVERFLOW_LABEL.clone() + ":"),
         &overflow_intrs,
         &(ERR_INVALID_ARG_LABEL.clone() + ":"),
