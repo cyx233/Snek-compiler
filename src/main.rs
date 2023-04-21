@@ -30,7 +30,6 @@ enum Reg {
     RAX,
     RCX,
     RSP,
-    RDI,
 }
 
 #[derive(Debug)]
@@ -226,7 +225,6 @@ impl Reg {
             Reg::RAX => "rax".to_string(),
             Reg::RCX => "rcx".to_string(),
             Reg::RSP => "rsp".to_string(),
-            Reg::RDI => "rdi".to_string(),
         }
     }
 }
@@ -328,9 +326,6 @@ fn compile_to_instrs(
     match e {
         Expr::Number(n) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Imm(*n))]),
         Expr::Boolean(b) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Boolean(*b))]),
-        Expr::Id(id) if id == "input" => {
-            Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RDI))])
-        }
         Expr::Id(id) => match env.get(id) {
             Some(n) => Ok(vec![Instr::IMov(
                 Val::Reg(Reg::RAX),
@@ -586,7 +581,9 @@ fn generate_expr(s: &String) -> Expr {
 
 fn compile(e: &Expr) -> String {
     let mut l = 0;
-    match compile_to_instrs(e, 2, &HashMap::new(), &mut l, &"".to_string()) {
+    let mut env = HashMap::new();
+    env.insert("input".to_string(), 2);
+    match compile_to_instrs(e, 3, &env, &mut l, &"".to_string()) {
         Ok(instrs) => instrs
             .iter()
             .map(|instr| instr.to_string())
@@ -623,6 +620,7 @@ fn main() -> std::io::Result<()> {
         &(ERR_INVALID_ARG_LABEL.clone() + ":"),
         &invalid_arg_instr,
         "our_code_starts_here:",
+        "\tmov [rsp-16],rdi",
         &result,
         "\tret",
     ]
