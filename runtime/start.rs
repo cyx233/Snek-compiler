@@ -12,13 +12,30 @@ extern "C" {
 #[export_name = "\x01snek_error"]
 pub extern "C" fn snek_error(errcode: i64) {
     // TODO: print error message according to writeup
-    eprintln!("an error ocurred {errcode}");
+    let err = errcode >> 1;
+    match err {
+        1 => eprintln!("invalid argument"),
+        _ => eprintln!("Unknown Error {err}"),
+    }
     std::process::exit(1);
 }
 
 fn parse_input(input: &str) -> u64 {
     // TODO: parse the input string into internal value representation
-    0
+    dbg!(input);
+    match input {
+        "true" => 3,
+        "false" => 1,
+        _ => (input.parse::<u64>().unwrap() << 1),
+    }
+}
+
+fn print_value(i: u64) {
+    match i {
+        3 => println!("true"),
+        1 => println!("false"),
+        _ => println!("{}", i >> 1),
+    }
 }
 
 fn main() {
@@ -27,5 +44,5 @@ fn main() {
     let input = parse_input(&input);
 
     let i: u64 = unsafe { our_code_starts_here(input) };
-    println!("{i}");
+    print_value(i);
 }

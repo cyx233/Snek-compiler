@@ -19,6 +19,28 @@ success_tests! {
         input: "10",
         expected: "true",
     },
+    {
+        name: block_set,
+        file: "block_set.snek",
+        expected: "6",
+    },
+    {
+        name: loop_break,
+        file: "loop_break.snek",
+        expected: "-6",
+    },
+    {
+        name: factorial_4,
+        file: "factorial.snek",
+        input: "4",
+        expected: "24",
+    },
+    {
+        name: factorial_5,
+        file: "factorial.snek",
+        input: "5",
+        expected: "120",
+    },
 }
 
 runtime_error_tests! {

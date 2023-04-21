@@ -11,20 +11,35 @@ use regex::Regex;
 
 lazy_static! {
     static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
+    static ref ERR_INVALID_ARG: i64 = 1;
+    static ref ERR_OVERFLOW: i64 = 2;
 }
 
 #[derive(Debug)]
 enum Val {
     Reg(Reg),
     Imm(i64),
+    Boolean(bool),
     RegOffset(Reg, i32),
 }
 
 #[derive(Debug)]
 enum Reg {
     RAX,
-    RBX,
     RSP,
+    RDI,
+}
+
+#[derive(Debug)]
+enum CondFlag {
+    Equal,
+    NotEqual,
+    Greater,
+    Less,
+    GreaterEqual,
+    LessEqual,
+    Always,
+    Never,
 }
 
 #[derive(Debug)]
@@ -33,6 +48,11 @@ enum Instr {
     IAdd(Val, Val),
     ISub(Val, Val),
     IMul(Val, Val),
+    Label(String),
+    TypeTest(Val),
+    Cmp(Val, Val),
+    SetIfElse(Reg, Val, Val, CondFlag),
+    JumpIf(String, CondFlag),
 }
 
 #[derive(Debug)]
@@ -53,6 +73,19 @@ enum Op2 {
     GreaterEqual,
     Less,
     LessEqual,
+}
+
+impl Op2 {
+    fn to_condflag(&self) -> CondFlag {
+        match self {
+            Op2::Equal => CondFlag::Equal,
+            Op2::Greater => CondFlag::Greater,
+            Op2::Less => CondFlag::Less,
+            Op2::GreaterEqual => CondFlag::GreaterEqual,
+            Op2::LessEqual => CondFlag::LessEqual,
+            _ => CondFlag::Never,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -91,7 +124,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
         Sexp::Atom(I(n)) => i32::try_from(*n)
             .map(Expr::Number)
-            .map_err(|e| "Number overflow"),
+            .map_err(|e| e.to_string()),
         Sexp::Atom(S(id)) => match id.as_str() {
             "true" => Ok(Expr::Boolean(true)),
             "false" => Ok(Expr::Boolean(false)),
@@ -139,7 +172,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                                 .collect::<Result<Vec<Expr>, String>>()?;
                             Ok(Expr::Block(e_instrs))
                         } else {
-                            Err(format!("Block Parse Error"))
+                            Err(format!("Block Bad Syntax"))
                         }
                     }
                     "loop" => Ok(Expr::Loop(Box::new(e_instrs))),
@@ -182,8 +215,8 @@ impl Reg {
     fn to_string(&self) -> String {
         match self {
             Reg::RAX => "rax".to_string(),
-            Reg::RBX => "rbx".to_string(),
             Reg::RSP => "rsp".to_string(),
+            Reg::RDI => "rdi".to_string(),
         }
     }
 }
@@ -191,32 +224,104 @@ impl Reg {
 impl Val {
     fn to_string(&self) -> String {
         match self {
-            Val::Imm(n) => n.to_string(),
+            Val::Imm(n) => (n << 1).to_string(),
+            Val::Boolean(b) => {
+                if *b {
+                    "3".to_string()
+                } else {
+                    "1".to_string()
+                }
+            }
             Val::Reg(reg) => reg.to_string(),
             Val::RegOffset(reg, offset) => format!("[{}-{}]", reg.to_string(), offset * 8),
         }
     }
 }
 
+impl CondFlag {
+    fn to_setop(&self) -> String {
+        match self {
+            CondFlag::Equal => "cmove",
+            CondFlag::NotEqual => "cmovne",
+            CondFlag::Greater => "cmovg",
+            CondFlag::Less => "cmovl",
+            CondFlag::GreaterEqual => "cmovge",
+            CondFlag::LessEqual => "cmovle",
+            CondFlag::Always | CondFlag::Never => "",
+        }
+        .to_string()
+    }
+    fn to_jmpop(&self) -> String {
+        match self {
+            CondFlag::Equal => "je",
+            CondFlag::NotEqual => "jne",
+            CondFlag::Greater => "jg",
+            CondFlag::Less => "jl",
+            CondFlag::GreaterEqual => "jge",
+            CondFlag::LessEqual => "jle",
+            CondFlag::Always => "jmp",
+            CondFlag::Never => "",
+        }
+        .to_string()
+    }
+}
+
 impl Instr {
     fn to_string(&self) -> String {
         match self {
-            Instr::IMov(v1, v2) => format!("mov {},{}", v1.to_string(), v2.to_string()),
-            Instr::IAdd(v1, v2) => format!("add {},{}", v1.to_string(), v2.to_string()),
-            Instr::ISub(v1, v2) => format!("sub {},{}", v1.to_string(), v2.to_string()),
-            Instr::IMul(v1, v2) => format!("imul {},{}", v1.to_string(), v2.to_string()),
+            Instr::IMov(v1, v2) => format!("\tmov {},{}", v1.to_string(), v2.to_string()),
+            Instr::IAdd(v1, v2) => format!("\tadd {},{}", v1.to_string(), v2.to_string()),
+            Instr::ISub(v1, v2) => format!("\tsub {},{}", v1.to_string(), v2.to_string()),
+            Instr::IMul(v1, v2) => format!(
+                "\timul {},{}\n\tsar {},1",
+                v1.to_string(),
+                v2.to_string(),
+                v1.to_string()
+            ),
+            Instr::Label(name) => format!("{}:", name.clone()),
+            Instr::TypeTest(v) => format!("\ttest {},1", v.to_string()),
+            Instr::Cmp(v1, v2) => format!("\tcmp {},{}", v1.to_string(), v2.to_string()),
+            Instr::SetIfElse(reg, true_v, false_v, cond) => match cond {
+                CondFlag::Always => format!("\tmov {}, {}", reg.to_string(), true_v.to_string()),
+                CondFlag::Never => format!("\tmov {}, {}", reg.to_string(), false_v.to_string()),
+                _ => format!(
+                    "\tmov {},{}\n\tmov rbx,{}\n\t{} {},rbx",
+                    reg.to_string(),
+                    false_v.to_string(),
+                    true_v.to_string(),
+                    cond.to_setop(),
+                    reg.to_string()
+                ),
+            },
+            Instr::JumpIf(v, cond) => match cond {
+                CondFlag::Never => "".to_string(),
+                _ => format!("\t{} {}", cond.to_jmpop(), *v),
+            },
         }
     }
 }
 
-fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Vec<Instr>, String> {
+fn new_label(l: &mut i32, s: &str) -> String {
+    let current = *l;
+    *l += 1;
+    format!("{s}_{current}")
+}
+
+fn compile_to_instrs(
+    e: &Expr,
+    si: i32,
+    env: &HashMap<String, i32>,
+    l: &mut i32,
+    break_target: &String,
+) -> Result<Vec<Instr>, String> {
     match e {
         Expr::Number(n) => Ok(vec![Instr::IMov(
             Val::Reg(Reg::RAX),
             Val::Imm(i64::from(*n)),
         )]),
-        Expr::Boolean(b) => {
-            unimplemented!("Boolean")
+        Expr::Boolean(b) => Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Boolean(*b))]),
+        Expr::Id(id) if id == "input" => {
+            Ok(vec![Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RDI))])
         }
         Expr::Id(id) => match env.get(id) {
             Some(n) => Ok(vec![Instr::IMov(
@@ -236,7 +341,8 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
                 } else {
                     cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
-                    let bind_instrs = compile_to_instrs(value_expr, cur_si, &nenv)?;
+                    let bind_instrs =
+                        compile_to_instrs(value_expr, cur_si, &nenv, l, break_target)?;
                     result.extend(bind_instrs);
                     result.push(Instr::IMov(
                         Val::RegOffset(Reg::RSP, cur_si),
@@ -245,35 +351,89 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
                     cur_si += 1;
                 }
             }
-            let body_instrs = compile_to_instrs(&body, cur_si, &nenv)?;
+            let body_instrs = compile_to_instrs(&body, cur_si, &nenv, l, break_target)?;
             result.extend(body_instrs);
             Ok(result)
         }
         Expr::UnOp(op, e) => {
-            let mut result = compile_to_instrs(e, si, env)?;
-            match op {
+            let e_instrs = compile_to_instrs(e, si, env, l, break_target)?;
+            let op_instrs = match op {
                 Op1::Add1 => {
-                    result.push(Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)));
+                    vec![
+                        Instr::TypeTest(Val::Reg(Reg::RAX)),
+                        Instr::SetIfElse(
+                            Reg::RDI,
+                            Val::Imm(*ERR_INVALID_ARG),
+                            Val::Reg(Reg::RDI),
+                            CondFlag::NotEqual,
+                        ),
+                        Instr::JumpIf("snek_error".to_string(), CondFlag::NotEqual),
+                        Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)),
+                    ]
                 }
                 Op1::Sub1 => {
-                    result.push(Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)));
+                    vec![
+                        Instr::TypeTest(Val::Reg(Reg::RAX)),
+                        Instr::SetIfElse(
+                            Reg::RDI,
+                            Val::Imm(*ERR_INVALID_ARG),
+                            Val::Reg(Reg::RDI),
+                            CondFlag::NotEqual,
+                        ),
+                        Instr::JumpIf("snek_error".to_string(), CondFlag::NotEqual),
+                        Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)),
+                    ]
                 }
-                Op1::IsNum => {
-                    unimplemented!("IsNum")
-                }
-                Op1::IsBool => {
-                    unimplemented!("IsBool")
-                }
+                Op1::IsNum => vec![
+                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::SetIfElse(
+                        Reg::RAX,
+                        Val::Boolean(true),
+                        Val::Boolean(false),
+                        CondFlag::NotEqual,
+                    ),
+                ],
+                Op1::IsBool => vec![
+                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::SetIfElse(
+                        Reg::RAX,
+                        Val::Boolean(true),
+                        Val::Boolean(false),
+                        CondFlag::Equal,
+                    ),
+                ],
             };
+            let mut result = e_instrs;
+            result.extend(op_instrs);
             Ok(result)
         }
         Expr::BinOp(op, e1, e2) => {
-            let e1_instrs = compile_to_instrs(e1, si, env)?;
+            let mut e2_instrs = compile_to_instrs(e2, si, env, l, break_target)?;
+            e2_instrs.extend(vec![
+                Instr::TypeTest(Val::Reg(Reg::RAX)),
+                Instr::SetIfElse(
+                    Reg::RDI,
+                    Val::Imm(*ERR_INVALID_ARG),
+                    Val::Reg(Reg::RDI),
+                    CondFlag::NotEqual,
+                ),
+                Instr::JumpIf("snek_error".to_string(), CondFlag::NotEqual),
+            ]);
             let concat_instrs = vec![Instr::IMov(
                 Val::RegOffset(Reg::RSP, si),
                 Val::Reg(Reg::RAX),
             )];
-            let e2_instrs = compile_to_instrs(e2, si + 1, env)?;
+            let mut e1_instrs = compile_to_instrs(e1, si + 1, env, l, break_target)?;
+            e1_instrs.extend(vec![
+                Instr::TypeTest(Val::Reg(Reg::RAX)),
+                Instr::SetIfElse(
+                    Reg::RDI,
+                    Val::Imm(*ERR_INVALID_ARG),
+                    Val::Reg(Reg::RDI),
+                    CondFlag::NotEqual,
+                ),
+                Instr::JumpIf("snek_error".to_string(), CondFlag::NotEqual),
+            ]);
 
             let op_instrs = match op {
                 Op2::Plus => vec![Instr::IAdd(
@@ -281,11 +441,10 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
                     Val::RegOffset(Reg::RSP, si),
                 )],
                 Op2::Minus => {
-                    vec![
-                        Instr::IMov(Val::Reg(Reg::RBX), Val::RegOffset(Reg::RSP, si)),
-                        Instr::ISub(Val::Reg(Reg::RBX), Val::Reg(Reg::RAX)),
-                        Instr::IMov(Val::Reg(Reg::RAX), Val::Reg(Reg::RBX)),
-                    ]
+                    vec![Instr::ISub(
+                        Val::Reg(Reg::RAX),
+                        Val::RegOffset(Reg::RSP, si),
+                    )]
                 }
                 Op2::Times => {
                     vec![Instr::IMul(
@@ -293,42 +452,82 @@ fn compile_to_instrs(e: &Expr, si: i32, env: &HashMap<String, i32>) -> Result<Ve
                         Val::RegOffset(Reg::RSP, si),
                     )]
                 }
-                Op2::Equal => {
-                    unimplemented!("Equal")
-                }
-                Op2::Greater => {
-                    unimplemented!("Greater")
-                }
-                Op2::GreaterEqual => {
-                    unimplemented!("GreaterEqual")
-                }
-                Op2::Less => {
-                    unimplemented!("Less")
-                }
-                Op2::LessEqual => {
-                    unimplemented!("LessEqual")
+                Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => {
+                    vec![
+                        Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                        Instr::SetIfElse(
+                            Reg::RAX,
+                            Val::Boolean(true),
+                            Val::Boolean(false),
+                            op.to_condflag(),
+                        ),
+                    ]
                 }
             };
-            let mut result = e1_instrs;
+            let mut result = e2_instrs;
             result.extend(concat_instrs);
-            result.extend(e2_instrs);
+            result.extend(e1_instrs);
             result.extend(op_instrs);
             Ok(result)
         }
         Expr::If(cond, if_expr, else_expr) => {
-            unimplemented!("If")
+            let end_label = new_label(l, "ifend");
+            let else_label = new_label(l, "ifelse");
+            let cond_instrs = compile_to_instrs(cond, si, env, l, break_target)?;
+            let if_instrs = compile_to_instrs(if_expr, si, env, l, break_target)?;
+            let else_instrs = compile_to_instrs(else_expr, si, env, l, break_target)?;
+
+            let mut result = cond_instrs;
+            result.extend(vec![
+                Instr::Cmp(Val::Reg(Reg::RAX), Val::Boolean(false)),
+                Instr::JumpIf(else_label.clone(), CondFlag::Equal),
+            ]);
+            result.extend(if_instrs);
+            result.extend(vec![
+                Instr::JumpIf(end_label.clone(), CondFlag::Always),
+                Instr::Label(else_label.clone()),
+            ]);
+            result.extend(else_instrs);
+            result.push(Instr::Label(end_label.clone()));
+            Ok(result)
         }
         Expr::Loop(e) => {
-            unimplemented!("Loop")
+            let loop_label = new_label(l, "loop");
+            let end_label = new_label(l, "endloop");
+            let e_instrs = compile_to_instrs(e, si, env, l, &end_label)?;
+            let mut result = vec![Instr::Label(loop_label.clone())];
+            result.extend(e_instrs);
+            result.push(Instr::JumpIf(loop_label.clone(), CondFlag::Always));
+            Ok(result)
         }
         Expr::Break(e) => {
-            unimplemented!("Break")
+            let mut result = compile_to_instrs(e, si, env, l, break_target)?;
+            result.push(Instr::JumpIf(break_target.clone(), CondFlag::Always));
+            Ok(result)
         }
         Expr::Set(id, e) => {
-            unimplemented!("Set")
+            let e_instrs = compile_to_instrs(e, si, env, l, break_target)?;
+            let set_instr = match env.get(id) {
+                Some(n) => Ok(vec![Instr::IMov(
+                    Val::RegOffset(Reg::RSP, *n),
+                    Val::Reg(Reg::RAX),
+                )]),
+                None => Err(format!("Unbound variable identifier {id}")),
+            }?;
+            let mut result = e_instrs;
+            result.extend(set_instr);
+            Ok(result)
         }
         Expr::Block(expr_vec) => {
-            unimplemented!("Block")
+            let b_instrs = expr_vec
+                .iter()
+                .map(|x| compile_to_instrs(x, si, env, l, break_target))
+                .collect::<Result<Vec<Vec<Instr>>, String>>()?;
+            let mut result = Vec::new();
+            for i in b_instrs {
+                result.extend(i);
+            }
+            Ok(result)
         }
     }
 }
@@ -350,7 +549,8 @@ fn generate_expr(s: &String) -> Expr {
 }
 
 fn compile(e: &Expr) -> String {
-    match compile_to_instrs(e, 2, &HashMap::new()) {
+    let mut l = 0;
+    match compile_to_instrs(e, 2, &HashMap::new(), &mut l, &"".to_string()) {
         Ok(instrs) => instrs
             .iter()
             .map(|instr| instr.to_string())
@@ -371,6 +571,7 @@ fn main() -> std::io::Result<()> {
     in_file.read_to_string(&mut in_contents)?;
 
     let expr = generate_expr(&in_contents);
+    dbg!(&expr);
     let result = compile(&expr);
 
     let asm_program = vec![
@@ -379,7 +580,7 @@ fn main() -> std::io::Result<()> {
         "global our_code_starts_here",
         "our_code_starts_here:",
         &result,
-        "ret",
+        "\tret",
     ]
     .join("\n");
 
