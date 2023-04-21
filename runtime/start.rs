@@ -25,7 +25,7 @@ fn parse_input(input: &str) -> i64 {
     match input {
         "true" => 3,
         "false" => 1,
-        _ => input.parse::<i64>().unwrap() << 1,
+        _ => input.parse::<i64>().unwrap(),
     }
 }
 

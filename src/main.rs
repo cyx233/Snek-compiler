@@ -461,29 +461,23 @@ fn compile_to_instrs(
                     Val::Reg(Reg::RAX),
                     Val::RegOffset(Reg::RSP, si),
                 )],
-                Op2::Minus => {
-                    vec![Instr::ISub(
-                        Val::Reg(Reg::RAX),
-                        Val::RegOffset(Reg::RSP, si),
-                    )]
-                }
-                Op2::Times => {
-                    vec![Instr::IMul(
-                        Val::Reg(Reg::RAX),
-                        Val::RegOffset(Reg::RSP, si),
-                    )]
-                }
-                Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => {
-                    vec![
-                        Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
-                        Instr::SetIfElse(
-                            Reg::RAX,
-                            Val::Boolean(true),
-                            Val::Boolean(false),
-                            op.to_condflag(),
-                        ),
-                    ]
-                }
+                Op2::Minus => vec![Instr::ISub(
+                    Val::Reg(Reg::RAX),
+                    Val::RegOffset(Reg::RSP, si),
+                )],
+                Op2::Times => vec![Instr::IMul(
+                    Val::Reg(Reg::RAX),
+                    Val::RegOffset(Reg::RSP, si),
+                )],
+                Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => vec![
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::SetIfElse(
+                        Reg::RAX,
+                        Val::Boolean(true),
+                        Val::Boolean(false),
+                        op.to_condflag(),
+                    ),
+                ],
             };
 
             let mut result = e2_instrs;
