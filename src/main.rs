@@ -358,6 +358,7 @@ fn compile_to_instrs(
                         | "sub1"
                         | "isnum"
                         | "isbool"
+                        | "input"
                 ) {
                     return Err(format!("id can't be a keyword \"{}\"", id));
                 } else {
