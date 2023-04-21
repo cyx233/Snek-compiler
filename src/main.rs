@@ -127,7 +127,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
 fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
         Sexp::Atom(I(n)) => {
-            if (*n < -4611686018427387904 || *n > 4611686018427387903) {
+            if *n < -4611686018427387904 || *n > 4611686018427387903 {
                 Err("overflow".to_string())
             } else {
                 Ok(Expr::Number(*n))
@@ -346,6 +346,8 @@ fn compile_to_instrs(
             for (id, value_expr) in bindings {
                 if cur_env.contains_key(id) {
                     return Err("Duplicate binding".to_string());
+                } else if matches!(id.as_str(), "true" | "false" | "block" | "let") {
+                    return Err(format!("An id is keyword \"{}\"", id));
                 } else {
                     cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
@@ -518,9 +520,13 @@ fn compile_to_instrs(
             Ok(result)
         }
         Expr::Break(e) => {
-            let mut result = compile_to_instrs(e, si, env, l, break_target)?;
-            result.push(Instr::JumpIf(break_target.clone(), CondFlag::Always));
-            Ok(result)
+            if break_target == "" {
+                Err("Invalid Break".to_string())
+            } else {
+                let mut result = compile_to_instrs(e, si, env, l, break_target)?;
+                result.push(Instr::JumpIf(break_target.clone(), CondFlag::Always));
+                Ok(result)
+            }
         }
         Expr::Set(id, e) => {
             let e_instrs = compile_to_instrs(e, si, env, l, break_target)?;

@@ -3,6 +3,11 @@ mod infra;
 // Your tests go here!
 success_tests! {
     {
+        name: simple_if,
+        file: "simple_if.snek",
+        expected: "true",
+    },
+    {
         name: false_val,
         file: "false_val.snek",
         expected: "false",
