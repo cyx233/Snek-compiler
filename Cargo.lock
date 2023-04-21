@@ -47,17 +47,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "boa"
-version = "0.1.0"
-dependencies = [
- "im",
- "lazy_static",
- "prettydiff",
- "regex",
- "sexp",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -82,6 +71,17 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "cobra"
+version = "0.1.0"
+dependencies = [
+ "im",
+ "lazy_static",
+ "prettydiff",
+ "regex",
+ "sexp",
 ]
 
 [[package]]
