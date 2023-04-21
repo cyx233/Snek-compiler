@@ -144,9 +144,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
 
 fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
-        Sexp::Atom(I(n)) => i32::try_from(*n)
-            .map(Expr::Number)
-            .map_err(|e| e.to_string()),
+        Sexp::Atom(I(n)) => Ok(Expr::Number(*n)),
         Sexp::Atom(S(id)) => Ok(Expr::Id(id.clone())),
         Sexp::List(vec) => match &vec[..] {
             // (let, <bindings>, <expr>) => Let
