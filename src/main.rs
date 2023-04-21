@@ -346,8 +346,11 @@ fn compile_to_instrs(
             for (id, value_expr) in bindings {
                 if cur_env.contains_key(id) {
                     return Err("Duplicate binding".to_string());
-                } else if matches!(id.as_str(), "true" | "false" | "block" | "let") {
-                    return Err(format!("An id is keyword \"{}\"", id));
+                } else if matches!(
+                    id.as_str(),
+                    "true" | "false" | "block" | "let" | "if" | "loop"
+                ) {
+                    return Err(format!("id can't be a keyword \"{}\"", id));
                 } else {
                     cur_env.insert(id.clone(), cur_si);
                     nenv.insert(id.clone(), cur_si);
@@ -521,7 +524,7 @@ fn compile_to_instrs(
         }
         Expr::Break(e) => {
             if break_target == "" {
-                Err("Invalid Break".to_string())
+                Err("Invalid break".to_string())
             } else {
                 let mut result = compile_to_instrs(e, si, env, l, break_target)?;
                 result.push(Instr::JumpIf(break_target.clone(), CondFlag::Always));
