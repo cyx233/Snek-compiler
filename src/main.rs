@@ -569,11 +569,11 @@ fn generate_expr(s: &String) -> Expr {
         Ok(sexpr) => match parse_expr(&sexpr) {
             Ok(expr) => expr,
             Err(msg) => {
-                panic!("Parse Invalid. {}", msg)
+                panic!("Parse Failed. {}", msg)
             }
         },
         Err(msg) => {
-            panic!("Sexpr Invalid. {}", msg)
+            panic!("Invalid Sexpr. {}", msg)
         }
     }
 }
@@ -587,7 +587,7 @@ fn compile(e: &Expr) -> String {
             .map(|instr| instr.to_string())
             .collect::<Vec<String>>()
             .join("\n"),
-        Err(msg) => panic!("Compile Invalid. {}", msg),
+        Err(msg) => panic!("Compile failed. {}", msg),
     }
 }
 
