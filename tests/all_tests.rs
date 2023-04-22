@@ -46,6 +46,11 @@ success_tests! {
         input: "5",
         expected: "120",
     },
+    {
+        name: shadow_binding,
+        file: "shadow_binding.snek",
+        expected: "21",
+    },
 }
 
 runtime_error_tests! {
