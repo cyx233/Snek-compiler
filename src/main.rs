@@ -366,10 +366,10 @@ fn compile_to_instrs(
                 if cur_env.contains_key(id) {
                     return Err("Duplicate binding".to_string());
                 } else {
-                    cur_env.insert(id.clone(), cur_si);
-                    nenv.insert(id.clone(), cur_si);
                     let bind_instrs =
                         compile_to_instrs(value_expr, cur_si, &nenv, l, break_target)?;
+                    cur_env.insert(id.clone(), cur_si);
+                    nenv.insert(id.clone(), cur_si);
                     result.extend(bind_instrs);
                     result.push(Instr::IMov(
                         Val::RegOffset(Reg::RSP, cur_si),
