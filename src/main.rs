@@ -5,7 +5,7 @@ use std::{env, vec};
 use sexp::Atom::*;
 use sexp::*;
 
-use im::HashMap;
+use im::{HashMap, HashSet};
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -203,14 +203,14 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             }
             // (<op>, <expr>) => Block, Loop, Break, UnOp
             [Sexp::Atom(S(op)), e] => {
-                let e_instrs = parse_expr(e)?;
+                let e_expr = parse_expr(e)?;
                 match op.as_str() {
-                    "loop" => Ok(Expr::Loop(Box::new(e_instrs))),
-                    "break" => Ok(Expr::Break(Box::new(e_instrs))),
-                    "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_instrs))),
-                    "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_instrs))),
-                    "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_instrs))),
-                    "isbool" => Ok(Expr::UnOp(Op1::IsBool, Box::new(e_instrs))),
+                    "loop" => Ok(Expr::Loop(Box::new(e_expr))),
+                    "break" => Ok(Expr::Break(Box::new(e_expr))),
+                    "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_expr))),
+                    "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_expr))),
+                    "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_expr))),
+                    "isbool" => Ok(Expr::UnOp(Op1::IsBool, Box::new(e_expr))),
                     _ => Err(format!("Invalid operator {}", op)),
                 }
             }
@@ -311,8 +311,10 @@ impl Instr {
                 v2.to_string()
             ),
             Instr::Label(name) => format!("{}:", name.clone()),
+            // Bool => 1, Int => 0
             Instr::TypeTest(v) => format!("\ttest {},1", v.to_string()),
             Instr::Cmp(v1, v2) => format!("\tcmp {},{}", v1.to_string(), v2.to_string()),
+            // reg = cond ? true_v : false_v
             Instr::SetIfElse(reg, true_v, false_v, cond) => match cond {
                 CondFlag::Always => format!("\tmov {}, {}", reg.to_string(), true_v.to_string()),
                 CondFlag::Never => "".to_string(),
@@ -360,15 +362,15 @@ fn compile_to_instrs(
         Expr::Let(bindings, body) => {
             let mut result: Vec<Instr> = Vec::new();
             let mut nenv: HashMap<String, i32> = env.clone();
-            let mut cur_env: HashMap<String, i32> = HashMap::new();
+            let mut cur_ids: HashSet<String> = HashSet::new();
             let mut cur_si = si;
             for (id, value_expr) in bindings {
-                if cur_env.contains_key(id) {
+                if cur_ids.contains(id) {
                     return Err("Duplicate binding".to_string());
                 } else {
                     let bind_instrs =
                         compile_to_instrs(value_expr, cur_si, &nenv, l, break_target)?;
-                    cur_env.insert(id.clone(), cur_si);
+                    cur_ids.insert(id.clone());
                     nenv.insert(id.clone(), cur_si);
                     result.extend(bind_instrs);
                     result.push(Instr::IMov(
@@ -432,7 +434,7 @@ fn compile_to_instrs(
             )]);
             let e1_instrs = compile_to_instrs(e1, si + 1, env, l, break_target)?;
             let tc_instrs = match op {
-                // Both bool or Both int
+                // Op2::Eqaul accepts 2 Bool or 2 Int
                 Op2::Equal => vec![
                     Instr::IMov(Val::RegOffset(Reg::RSP, si + 1), Val::Reg(Reg::RAX)),
                     Instr::TypeTest(Reg::RAX),
@@ -454,7 +456,7 @@ fn compile_to_instrs(
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                 ],
-                // Only accept int
+                //other ops only accept Int
                 _ => vec![
                     Instr::TypeTest(Reg::RAX),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
@@ -464,18 +466,18 @@ fn compile_to_instrs(
                 ],
             };
             let op_instrs = match op {
-                Op2::Plus => vec![Instr::IAdd(
-                    Val::Reg(Reg::RAX),
-                    Val::RegOffset(Reg::RSP, si),
-                )],
-                Op2::Minus => vec![Instr::ISub(
-                    Val::Reg(Reg::RAX),
-                    Val::RegOffset(Reg::RSP, si),
-                )],
-                Op2::Times => vec![Instr::IMul(
-                    Val::Reg(Reg::RAX),
-                    Val::RegOffset(Reg::RSP, si),
-                )],
+                Op2::Plus => vec![
+                    Instr::IAdd(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
+                ],
+                Op2::Minus => vec![
+                    Instr::ISub(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
+                ],
+                Op2::Times => vec![
+                    Instr::IMul(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
+                ],
                 Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => vec![
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
                     Instr::SetIfElse(
@@ -491,10 +493,6 @@ fn compile_to_instrs(
             result.extend(e1_instrs);
             result.extend(tc_instrs);
             result.extend(op_instrs);
-            result.push(Instr::JumpIf(
-                ERR_OVERFLOW_LABEL.clone(),
-                CondFlag::Overflow,
-            ));
             Ok(result)
         }
         Expr::If(cond, if_expr, else_expr) => {
