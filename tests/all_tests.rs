@@ -3,6 +3,11 @@ mod infra;
 // Your tests go here!
 success_tests! {
     {
+        name: simple_if,
+        file: "simple_if.snek",
+        expected: "true",
+    },
+    {
         name: false_val,
         file: "false_val.snek",
         expected: "false",
@@ -19,6 +24,33 @@ success_tests! {
         input: "10",
         expected: "true",
     },
+    {
+        name: block_set,
+        file: "block_set.snek",
+        expected: "6",
+    },
+    {
+        name: loop_break,
+        file: "loop_break.snek",
+        expected: "-6",
+    },
+    {
+        name: factorial_4,
+        file: "factorial.snek",
+        input: "4",
+        expected: "24",
+    },
+    {
+        name: factorial_5,
+        file: "factorial.snek",
+        input: "5",
+        expected: "120",
+    },
+    {
+        name: shadow_binding,
+        file: "shadow_binding.snek",
+        expected: "21",
+    },
 }
 
 runtime_error_tests! {
@@ -32,6 +64,12 @@ runtime_error_tests! {
         file: "input_compare.snek",
         input: "true",
         expected: "invalid argument",
+    },
+    {
+        name: overflow,
+        file: "factorial.snek",
+        input: "32",
+        expected: "overflow",
     },
 }
 

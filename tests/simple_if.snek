@@ -1,0 +1,7 @@
+(let ((x false)) 
+	(block
+	(set! x 1)
+	(if (>= x 1) 
+		true 
+		false))
+)
