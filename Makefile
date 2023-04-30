@@ -2,9 +2,11 @@ UNAME := $(shell uname)
 
 ifeq ($(UNAME), Linux)
 ARCH := elf64
+CFLAG := -L
 endif
 ifeq ($(UNAME), Darwin)
 ARCH := macho64
+CFLAG := --target x86_64-apple-darwin -L
 endif
 
 tests/%.s: tests/%.snek src/main.rs
@@ -13,7 +15,7 @@ tests/%.s: tests/%.snek src/main.rs
 tests/%.run: tests/%.s runtime/start.rs
 	nasm -f $(ARCH) tests/$*.s -o tests/$*.o
 	ar rcs tests/lib$*.a tests/$*.o
-	rustc -L tests/ -lour_code:$* runtime/start.rs -o tests/$*.run
+	rustc $(CFLAG) tests/ -lour_code:$* runtime/start.rs -o tests/$*.run
 
 .PHONY: test
 test:
