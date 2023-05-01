@@ -243,12 +243,12 @@ fn compile_to_instrs(
             Ok(result)
         }
         Expr::BinOp(op, e1, e2) => {
-            let mut e2_instrs = compile_to_instrs(e2, si, env, l, break_target)?;
-            e2_instrs.extend(vec![Instr::IMov(
+            let mut e1_instrs = compile_to_instrs(e1, si, env, l, break_target)?;
+            e1_instrs.extend(vec![Instr::IMov(
                 Val::RegOffset(Reg::RSP, si),
                 Val::Reg(Reg::RAX),
             )]);
-            let e1_instrs = compile_to_instrs(e1, si + 1, env, l, break_target)?;
+            let e2_instrs = compile_to_instrs(e2, si + 1, env, l, break_target)?;
             let tc_instrs = match op {
                 // Op2::Eqaul accepts 2 Bool or 2 Int
                 Op2::Equal => vec![
@@ -270,32 +270,33 @@ fn compile_to_instrs(
                     ),
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
+                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
                 ],
                 //other ops only accept Int
                 _ => vec![
+                    Instr::IMov(Val::RegOffset(Reg::RSP, si + 1), Val::Reg(Reg::RAX)),
                     Instr::TypeTest(Reg::RAX),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                    Instr::IMov(Val::Reg(Reg::RCX), Val::RegOffset(Reg::RSP, si)),
-                    Instr::TypeTest(Reg::RCX),
+                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::TypeTest(Reg::RAX),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                 ],
             };
             let op_instrs = match op {
                 Op2::Plus => vec![
-                    Instr::IAdd(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::IAdd(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                     Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                 ],
                 Op2::Minus => vec![
-                    Instr::ISub(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::ISub(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                     Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                 ],
                 Op2::Times => vec![
-                    Instr::IMul(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::IMul(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                     Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                 ],
                 Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => vec![
-                    Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si)),
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, si + 1)),
                     Instr::SetIfElse(
                         Reg::RAX,
                         Val::Boolean(true),
@@ -305,8 +306,8 @@ fn compile_to_instrs(
                 ],
             };
 
-            let mut result = e2_instrs;
-            result.extend(e1_instrs);
+            let mut result = e1_instrs;
+            result.extend(e2_instrs);
             result.extend(tc_instrs);
             result.extend(op_instrs);
             Ok(result)
