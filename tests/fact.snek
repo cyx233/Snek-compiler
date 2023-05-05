@@ -1,7 +1,15 @@
-(let ((acc 1) (v input))
-  (loop (block
-    (if (<= v 1)
+(fun (fact n)
+  (let
+    ((i 1) (acc 1))
+    (loop
+      (if (> i n)
         (break acc)
         (block
-          (set! acc (* acc v))
-          (set! v (sub1 v)))))))
+          (set! acc (* acc i))
+          (set! i (+ i 1))
+        )
+      )
+    )
+  )
+)
+(fact input)
