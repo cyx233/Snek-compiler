@@ -1,13 +1,15 @@
+use crate::compiler::compile;
 use crate::errors::*;
-use crate::instr::compile;
-use crate::parser::parse_code;
+use crate::parse::parse_code;
 use std::fs::File;
 use std::io::prelude::*;
 use std::{env, vec};
 
+mod compiler;
 mod errors;
+mod expr;
 mod instr;
-mod parser;
+mod parse;
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();

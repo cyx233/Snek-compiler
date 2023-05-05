@@ -1,3 +1,4 @@
+use crate::expr::{Expr, Op1, Op2};
 use lazy_static::lazy_static;
 use regex::Regex;
 use sexp::Atom::*;
@@ -5,42 +6,6 @@ use sexp::*;
 
 lazy_static! {
     static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-}
-
-#[derive(Debug)]
-pub enum Expr {
-    Number(i64),
-    Boolean(bool),
-    Id(String),
-    Let(Vec<(String, Expr)>, Box<Expr>),
-    UnOp(Op1, Box<Expr>),
-    BinOp(Op2, Box<Expr>, Box<Expr>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
-    Loop(Box<Expr>),
-    Break(Box<Expr>),
-    Set(String, Box<Expr>),
-    Block(Vec<Expr>),
-    Input,
-}
-
-#[derive(Debug)]
-pub enum Op1 {
-    Add1,
-    Sub1,
-    IsNum,
-    IsBool,
-}
-
-#[derive(Debug)]
-pub enum Op2 {
-    Plus,
-    Minus,
-    Times,
-    Equal,
-    Greater,
-    GreaterEqual,
-    Less,
-    LessEqual,
 }
 
 fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
