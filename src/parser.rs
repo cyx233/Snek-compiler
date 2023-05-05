@@ -1,4 +1,4 @@
-use crate::expr::{Expr, Op1, Op2};
+use crate::syntax::{Expr, Op1, Op2};
 use lazy_static::lazy_static;
 use regex::Regex;
 use sexp::Atom::*;

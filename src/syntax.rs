@@ -1,4 +1,15 @@
 use crate::instr::CondFlag;
+
+#[derive(Debug)]
+pub enum Prog {
+    Prog(Vec<Defn>, Box<Expr>),
+}
+
+#[derive(Debug)]
+pub enum Defn {
+    Func(String, Vec<String>, Box<Expr>),
+}
+
 #[derive(Debug)]
 pub enum Expr {
     Number(i64),
@@ -12,6 +23,7 @@ pub enum Expr {
     Break(Box<Expr>),
     Set(String, Box<Expr>),
     Block(Vec<Expr>),
+    Call(String, Vec<Expr>),
     Input,
 }
 
@@ -21,6 +33,7 @@ pub enum Op1 {
     Sub1,
     IsNum,
     IsBool,
+    Print,
 }
 
 #[derive(Debug)]

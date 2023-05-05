@@ -1,6 +1,7 @@
 use crate::errors::*;
-use crate::expr::{Expr, Op1, Op2};
-use crate::instr::{CondFlag, Instr, Reg, Val};
+use crate::instr::*;
+use crate::syntax::*;
+
 use im::{HashMap, HashSet};
 fn new_label(l: &mut i32, s: &str) -> String {
     let current = *l;
@@ -88,6 +89,7 @@ fn compile_to_instrs(
                         CondFlag::NotZero,
                     ),
                 ],
+                Op1::Print => vec![],
             };
             let mut result = e_instrs;
             result.extend(op_instrs);
@@ -227,6 +229,7 @@ fn compile_to_instrs(
             }
             Ok(result)
         }
+        Expr::Call(func, exprs) => unimplemented!("coimpile call"),
     }
 }
 
