@@ -20,6 +20,17 @@ pub extern "C" fn snek_error(errcode: i64) {
     std::process::exit(1);
 }
 
+#[export_name = "\x01snek_print"]
+fn snek_print(val: i64) -> i64 {
+    match val {
+        3 => println!("true"),
+        1 => println!("false"),
+        n if n & 1 == 0 => println!("{}", val >> 1),
+        _ => println!("Unknown value: {}", val),
+    }
+    return val;
+}
+
 fn parse_input(input: &str) -> i64 {
     // TODO: parse the input string into internal value representation
     match input {
