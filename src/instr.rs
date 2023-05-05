@@ -33,6 +33,7 @@ pub enum Instr {
     IAdd(Val, Val),
     ISub(Val, Val),
     IMul(Val, Val),
+    IXor(Val, Val),
     Label(String),
     TypeTest(Reg),
     Cmp(Val, Val),
@@ -109,6 +110,7 @@ impl Instr {
                 v1.to_string(),
                 v2.to_string()
             ),
+            Instr::IXor(v1, v2) => format!("\txor {},{}", v1.to_string(), v2.to_string()),
             Instr::Label(name) => format!("{}:", name.clone()),
             // Bool => 1, Int => 0
             Instr::TypeTest(v) => format!("\ttest {},1", v.to_string()),
