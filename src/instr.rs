@@ -1,12 +1,12 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Val {
     Reg(Reg),
     Imm(i64),
     Boolean(bool),
-    RegOffset(Reg, i32),
+    RegOffset(Reg, u64),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reg {
     RAX,
     RCX,
@@ -40,6 +40,8 @@ pub enum Instr {
     Cmp(Val, Val),
     SetIfElse(Reg, Val, Val, CondFlag),
     JumpIf(String, CondFlag),
+    ICall(String),
+    Empty(),
 }
 
 impl Reg {
@@ -102,9 +104,14 @@ impl CondFlag {
 impl Instr {
     pub fn to_string(&self) -> String {
         match self {
-            Instr::IMov(v1, v2) => match v1 {
+            Instr::IMov(v1, v2) if v1 != v2 => match v1 {
                 Val::Reg(_) => format!("\tmov {},{}", v1.to_string(), v2.to_string()),
-                _ => format!("\tmov qword {},{}", v1.to_string(), v2.to_string()),
+                _ => match v2 {
+                    Val::RegOffset(_, _) => {
+                        format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
+                    }
+                    _ => format!("\tmov qword {},{}", v1.to_string(), v2.to_string()),
+                },
             },
             Instr::IAdd(v1, v2) => format!("\tadd {},{}", v1.to_string(), v2.to_string()),
             Instr::ISub(v1, v2) => format!("\tsub {},{}", v1.to_string(), v2.to_string()),
@@ -137,6 +144,9 @@ impl Instr {
                 CondFlag::Never => "".to_string(),
                 _ => format!("\t{} {}", cond.to_jmpop(), *v),
             },
+            Instr::ICall(name) => format!("\tcall {}", name),
+            Instr::Empty() => ";".to_string(),
+            _ => "".to_string(),
         }
     }
 }

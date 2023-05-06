@@ -7,9 +7,9 @@ use std::{env, vec};
 
 mod compiler;
 mod errors;
-mod syntax;
 mod instr;
 mod parser;
+mod syntax;
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -24,9 +24,9 @@ fn main() -> std::io::Result<()> {
     let expr = parse_code(&in_contents);
     let result = compile(&expr);
 
-    let invalid_arg_instr = format!("\tmov rdi,{}\n\tjmp snek_error", *ERR_INVALID_ARG_CODE);
+    let invalid_arg_instr = format!("\tmov rdi,{}\n\tcall snek_error", *ERR_INVALID_ARG_CODE);
 
-    let overflow_intrs = format!("\tmov rdi,{}\n\tjmp snek_error", *ERR_OVERFLOW_CODE);
+    let overflow_intrs = format!("\tmov rdi,{}\n\tcall snek_error", *ERR_OVERFLOW_CODE);
 
     let asm_program = vec![
         "section .text",
@@ -34,9 +34,10 @@ fn main() -> std::io::Result<()> {
         "global our_code_starts_here",
         &(ERR_OVERFLOW_LABEL.clone() + ":"),
         &overflow_intrs,
+        ";",
         &(ERR_INVALID_ARG_LABEL.clone() + ":"),
         &invalid_arg_instr,
-        "our_code_starts_here:",
+        ";",
         &result,
         "\tret",
     ]
