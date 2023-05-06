@@ -21,6 +21,7 @@ pub enum Expr {
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Loop(Box<Expr>),
     Break(Box<Expr>),
+    Print(Box<Expr>),
     Set(String, Box<Expr>),
     Block(Vec<Expr>),
     Call(String, Vec<Expr>),
@@ -33,7 +34,6 @@ pub enum Op1 {
     Sub1,
     IsNum,
     IsBool,
-    Print,
 }
 
 #[derive(Debug)]

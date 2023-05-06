@@ -105,13 +105,14 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             [Sexp::Atom(S(op)), e]
                 if matches!(
                     op.as_str(),
-                    "loop" | "break" | "add1" | "sub1" | "isnum" | "isbool"
+                    "loop" | "break" | "add1" | "sub1" | "isnum" | "isbool" | "print"
                 ) =>
             {
                 let e_expr = parse_expr(e)?;
                 match op.as_str() {
                     "loop" => Ok(Expr::Loop(Box::new(e_expr))),
                     "break" => Ok(Expr::Break(Box::new(e_expr))),
+                    "print" => Ok(Expr::Print(Box::new(e_expr))),
                     "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_expr))),
                     "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_expr))),
                     "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_expr))),

@@ -3,7 +3,7 @@ pub enum Val {
     Reg(Reg),
     Imm(i64),
     Boolean(bool),
-    RegOffset(Reg, u64),
+    RegOffset(Reg, i64),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +42,9 @@ pub enum Instr {
     JumpIf(String, CondFlag),
     ICall(String),
     Empty(),
+    Return(),
+    AddRsp(i64),
+    SubRsp(i64),
 }
 
 impl Reg {
@@ -67,7 +70,13 @@ impl Val {
                 }
             }
             Val::Reg(reg) => reg.to_string(),
-            Val::RegOffset(reg, offset) => format!("[{} + {}]", reg.to_string(), offset * 8),
+            Val::RegOffset(reg, offset) => {
+                if *offset >= 0 {
+                    format!("[{} + {}]", reg.to_string(), offset * 8)
+                } else {
+                    format!("[{} - {}]", reg.to_string(), -offset * 8)
+                }
+            }
         }
     }
 }
@@ -146,6 +155,9 @@ impl Instr {
             },
             Instr::ICall(name) => format!("\tcall {}", name),
             Instr::Empty() => ";".to_string(),
+            Instr::Return() => "\tret".to_string(),
+            Instr::AddRsp(n) if *n > 0 => format!("\tadd rsp,{}", n),
+            Instr::SubRsp(n) if *n > 0 => format!("\tsub rsp,{}", n),
             _ => "".to_string(),
         }
     }

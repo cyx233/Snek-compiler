@@ -31,6 +31,7 @@ fn main() -> std::io::Result<()> {
     let asm_program = vec![
         "section .text",
         "extern snek_error",
+        "extern snek_print",
         "global our_code_starts_here",
         &(ERR_OVERFLOW_LABEL.clone() + ":"),
         &overflow_intrs,
@@ -39,7 +40,6 @@ fn main() -> std::io::Result<()> {
         &invalid_arg_instr,
         ";",
         &result,
-        "\tret",
     ]
     .join("\n");
 
