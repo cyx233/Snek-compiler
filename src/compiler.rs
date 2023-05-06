@@ -323,9 +323,14 @@ fn compile_expr_to_instrs(
             Ok(result)
         }
         Expr::Call(name, expr_vec) => {
-            if !state.funcs.contains_key(name) {
-                Err(format!("Undefined func {}", name))
-            } else {
+            if let Some(args_num) = state.funcs.get(name) {
+                if *args_num != expr_vec.len() as u64 {
+                    return Err(format!(
+                        "Expect {} args, but get {}",
+                        args_num,
+                        expr_vec.len()
+                    ));
+                }
                 let mut result = vec![];
                 let mut si = -(expr_vec.len() as i64 + 1);
                 for expr in expr_vec {
@@ -348,6 +353,8 @@ fn compile_expr_to_instrs(
                     Instr::AddRsp((expr_vec.len() + 1) as i64 * 8),
                 ]);
                 Ok(result)
+            } else {
+                Err(format!("Undefined func {}", name))
             }
         }
     }
