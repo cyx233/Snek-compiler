@@ -438,6 +438,6 @@ pub fn compile(prog: &Prog) -> String {
             .filter(|x| !x.is_empty())
             .collect::<Vec<String>>()
             .join("\n"),
-        Err(msg) => panic!("Compile failed. {}", msg),
+        Err(msg) => panic!("Invalid Compile. {}", msg),
     }
 }

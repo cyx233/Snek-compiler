@@ -242,7 +242,7 @@ pub fn parse_code(s: &String) -> Prog {
         Ok((s_defns, s_expr)) => match parse_prog(s_defns, &s_expr) {
             Ok(prog) => prog,
             Err(msg) => {
-                panic!("Parse Failed. {}", msg)
+                panic!("Invalid Parse. {}", msg)
             }
         },
         Err(msg) => {
