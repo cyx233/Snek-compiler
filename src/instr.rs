@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Val {
     Reg(Reg),
     Imm(i64),
@@ -6,7 +6,7 @@ pub enum Val {
     RegOffset(Reg, i32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Reg {
     RAX,
     RCX,
@@ -36,7 +36,7 @@ pub enum Instr {
     IXor(Val, Val),
     IOr(Val, Val),
     Label(String),
-    TypeTest(Reg),
+    TypeTest(Val),
     Cmp(Val, Val),
     SetIfElse(Reg, Val, Val, CondFlag),
     JumpIf(String, CondFlag),
@@ -65,7 +65,7 @@ impl Val {
                 }
             }
             Val::Reg(reg) => reg.to_string(),
-            Val::RegOffset(reg, offset) => format!("[{}+{}]", reg.to_string(), offset * 8),
+            Val::RegOffset(reg, offset) => format!("[{} + {}]", reg.to_string(), offset * 8),
         }
     }
 }
@@ -102,7 +102,10 @@ impl CondFlag {
 impl Instr {
     pub fn to_string(&self) -> String {
         match self {
-            Instr::IMov(v1, v2) => format!("\tmov {},{}", v1.to_string(), v2.to_string()),
+            Instr::IMov(v1, v2) => match v1 {
+                Val::Reg(_) => format!("\tmov {},{}", v1.to_string(), v2.to_string()),
+                _ => format!("\tmov qword {},{}", v1.to_string(), v2.to_string()),
+            },
             Instr::IAdd(v1, v2) => format!("\tadd {},{}", v1.to_string(), v2.to_string()),
             Instr::ISub(v1, v2) => format!("\tsub {},{}", v1.to_string(), v2.to_string()),
             Instr::IMul(v1, v2) => format!(

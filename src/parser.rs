@@ -1,5 +1,4 @@
 use crate::syntax::*;
-use im::HashSet;
 use lazy_static::lazy_static;
 use regex::Regex;
 use sexp::Atom::*;
