@@ -1,16 +1,17 @@
 use crate::errors::*;
 use crate::instr::*;
 use crate::syntax::*;
+use im::{HashMap, HashSet};
 
 #[derive(Clone)]
 struct CompileState<'a> {
     label: i32,
     si: i32,
     env: &'a HashMap<String, i32>,
+    funcs: &'a HashSet<String>,
     break_target: &'a String,
 }
 
-use im::{HashMap, HashSet};
 fn new_label<'a>(state: &'a CompileState<'a>, s: String) -> (String, CompileState<'a>) {
     let current = state.label;
     (
@@ -20,6 +21,25 @@ fn new_label<'a>(state: &'a CompileState<'a>, s: String) -> (String, CompileStat
             ..state.clone()
         },
     )
+}
+
+fn depth(e: &Expr) -> i64 {
+    match e {
+        Expr::Let(e1, e2) => e1
+            .iter()
+            .map(|x| depth(&(*x).1))
+            .max()
+            .unwrap()
+            .max(depth(e2) + 1),
+        Expr::BinOp(_, e1, e2) => depth(e1).max(depth(e2)),
+        Expr::If(cond, e1, e2) => depth(cond).max(depth(e1)).max(depth(e2)),
+        Expr::Loop(e) => depth(e),
+        Expr::Break(e) => depth(e),
+        Expr::Set(_, e) => depth(e),
+        Expr::Block(exprs) => exprs.iter().map(depth).max().unwrap(),
+        Expr::Call(_, exprs) => exprs.iter().map(depth).max().unwrap(),
+        _ => 0,
+    }
 }
 
 fn compile_expr_to_instrs(e: &Expr, state: &CompileState) -> Result<Vec<Instr>, String> {
@@ -131,38 +151,36 @@ fn compile_expr_to_instrs(e: &Expr, state: &CompileState) -> Result<Vec<Instr>, 
             let tc_instrs = match op {
                 // Op2::Eqaul accepts 2 Bool or 2 Int
                 Op2::Equal => vec![
-                    Instr::IMov(Val::RegOffset(Reg::RSP, state.si + 1), Val::Reg(Reg::RAX)),
-                    Instr::IMov(Val::Reg(Reg::RCX), Val::RegOffset(Reg::RSP, state.si)),
-                    Instr::IXor(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
+                    Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RAX)),
+                    Instr::IXor(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::TypeTest(Reg::RAX),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                 ],
                 //other ops only accept Int
                 _ => vec![
-                    Instr::IMov(Val::RegOffset(Reg::RSP, state.si + 1), Val::Reg(Reg::RAX)),
+                    Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RAX)),
+                    Instr::IOr(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::TypeTest(Reg::RAX),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
-                    Instr::TypeTest(Reg::RAX),
-                    Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                 ],
             };
             let op_instrs = match op {
                 Op2::Plus => vec![
-                    Instr::IAdd(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si + 1)),
+                    Instr::IAdd(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                 ],
                 Op2::Minus => vec![
-                    Instr::ISub(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si + 1)),
+                    Instr::ISub(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                 ],
                 Op2::Times => vec![
-                    Instr::IMul(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si + 1)),
+                    Instr::IMul(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                 ],
                 Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => vec![
-                    Instr::Cmp(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si + 1)),
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::SetIfElse(
                         Reg::RAX,
                         Val::Boolean(true),
@@ -248,7 +266,17 @@ fn compile_expr_to_instrs(e: &Expr, state: &CompileState) -> Result<Vec<Instr>, 
             }
             Ok(result)
         }
-        Expr::Call(func, exprs) => unimplemented!("coimpile call"),
+        Expr::Call(name, exprs) => {
+            if !state.funcs.contains(name) {
+                Err(format!("Undefined func {}", name))
+            } else {
+                let args = exprs
+                    .iter()
+                    .map(|expr| compile_expr_to_instrs(expr, state))
+                    .collect::<Result<Vec<Vec<Instr>>, String>>()?;
+                unimplemented!("compile call")
+            }
+        }
     }
 }
 
@@ -275,6 +303,7 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
             label: 0,
             si: 2,
             env: &HashMap::<String, i32>::new(),
+            funcs: &funcs,
             break_target: &"".to_string(),
         },
     )?;

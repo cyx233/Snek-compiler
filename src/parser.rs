@@ -1,4 +1,5 @@
 use crate::syntax::*;
+use im::HashSet;
 use lazy_static::lazy_static;
 use regex::Regex;
 use sexp::Atom::*;
@@ -59,8 +60,8 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
         },
         Sexp::List(vec) => match &vec[..] {
             // Block
-            [Sexp::Atom(S(op)), ..] if op == "block" => {
-                let result = vec[1..]
+            [Sexp::Atom(S(op)), rest @ ..] if op == "block" => {
+                let result = rest
                     .iter()
                     .map(parse_expr)
                     .collect::<Result<Vec<Expr>, String>>()?;
@@ -101,8 +102,13 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(else_expr),
                 ))
             }
-            // (<op>, <expr>) => Block, Loop, Break, UnOp
-            [Sexp::Atom(S(op)), e] => {
+            // (<unop>, <expr>) => Loop, Break, UnOp
+            [Sexp::Atom(S(op)), e]
+                if matches!(
+                    op.as_str(),
+                    "loop" | "break" | "add1" | "sub1" | "isnum" | "isbool"
+                ) =>
+            {
                 let e_expr = parse_expr(e)?;
                 match op.as_str() {
                     "loop" => Ok(Expr::Loop(Box::new(e_expr))),
@@ -114,8 +120,10 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     _ => Err(format!("Invalid operator {}", op)),
                 }
             }
-            // (<op>, <expr>, <expr>) => BinOp
-            [Sexp::Atom(S(op)), e1, e2] => {
+            // (<binop>, <expr>, <expr>) => BinOp
+            [Sexp::Atom(S(op)), e1, e2]
+                if matches!(op.as_str(), "+" | "-" | "*" | ">" | "<" | ">=" | "<=" | "=") =>
+            {
                 let expr_op = match op.as_str() {
                     "+" => Op2::Plus,
                     "-" => Op2::Minus,
@@ -135,6 +143,13 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(e2_instrs),
                 ))
             }
+            [Sexp::Atom(S(func)), args @ ..] => {
+                let exprs = args
+                    .iter()
+                    .map(parse_expr)
+                    .collect::<Result<Vec<Expr>, String>>()?;
+                Ok(Expr::Call(func.to_string(), exprs))
+            }
             _ => Err("Invalid Syntax: Sexp::List".to_string()),
         },
         _ => Err("Invalid Syntax: Sexp".to_string()),
@@ -142,7 +157,34 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
 }
 
 fn parse_defn(s_defns: Vec<Sexp>) -> Result<Vec<Defn>, String> {
-    Ok(vec![])
+    s_defns
+        .iter()
+        .map(|s| match s {
+            Sexp::List(vec) => match &vec[..] {
+                [Sexp::Atom(S(op)), Sexp::List(v), s_expr] if op == "fun" => {
+                    let e = parse_expr(s_expr)?;
+                    let names = v
+                        .iter()
+                        .map(|n| match n {
+                            Sexp::Atom(S(name)) => Ok(name.clone()),
+                            _ => Err("Bad Defn Syntax: name must be String".to_string()),
+                        })
+                        .collect::<Result<Vec<String>, String>>()?;
+                    if names.is_empty() {
+                        Err("Bad Defn Syntax: names is empty".to_string())
+                    } else {
+                        Ok(Defn::Func(
+                            names[0].clone(),
+                            names[1..names.len()].to_vec(),
+                            Box::new(e),
+                        ))
+                    }
+                }
+                _ => Err("Bad Defn Syntax".to_string()),
+            },
+            _ => Err("Bad Defn Syntax".to_string()),
+        })
+        .collect::<Result<Vec<Defn>, String>>()
 }
 
 fn split_by_parentheses(s: &str) -> Vec<String> {
