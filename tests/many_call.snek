@@ -1,0 +1,4 @@
+(fun (inc n)
+	(+ n 1)
+)
+(inc (inc (inc (inc input))))

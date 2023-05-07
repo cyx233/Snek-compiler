@@ -344,7 +344,7 @@ fn compile_expr_to_instrs(
                     .collect::<HashMap<String, i64>>();
                 let mut si = 0;
                 let mut result = vec![Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8))];
-                for expr in expr_vec.iter().rev() {
+                for expr in expr_vec {
                     let instrs = compile_expr_to_instrs(
                         expr,
                         label,
