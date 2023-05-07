@@ -114,7 +114,12 @@ fn compile_expr_to_instrs(
             )?;
             result.extend(e_instrs);
             result.extend(vec![
+                Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RSP)),
+                Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(8)),
+                Instr::IAnd(Val::Reg(Reg::RSP), Val::Imm(-16)),
+                Instr::IMov(Val::RegOffset(Reg::RSP, 0), Val::Reg(Reg::RCX)),
                 Instr::ICall("snek_print".to_string()),
+                Instr::IMov(Val::Reg(Reg::RSP), Val::RegOffset(Reg::RSP, 0)),
                 Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
                 Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, state.si)),
             ]);
@@ -386,7 +391,9 @@ pub fn compile_defn_to_instrs(
         }
 
         result.push(Instr::Label(name.clone()));
-        result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+        if stack_depth > 0 {
+            result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+        }
         let expr = compile_expr_to_instrs(
             expr,
             label,
@@ -400,7 +407,9 @@ pub fn compile_defn_to_instrs(
             },
         )?;
         result.extend(expr);
-        result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+        if stack_depth > 0 {
+            result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+        }
         result.push(Instr::Return());
         result.push(Instr::Empty());
     }
@@ -425,7 +434,9 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
 
     result.push(Instr::Label("our_code_starts_here".to_string()));
     let stack_depth = depth(expr);
-    result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+    if stack_depth > 0 {
+        result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+    }
     let expr_instrs = compile_expr_to_instrs(
         expr,
         &mut label,
@@ -439,7 +450,9 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
         },
     )?;
     result.extend(expr_instrs);
-    result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+    if stack_depth > 0 {
+        result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
+    }
     result.push(Instr::Return());
     Ok(result)
 }
