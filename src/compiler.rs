@@ -357,8 +357,8 @@ fn compile_expr_to_instrs(
                     Instr::IMov(Val::RegOffset(Reg::RSP, si), Val::Reg(Reg::RDI)),
                     Instr::ICall(name.clone()),
                     Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, si)),
-                    Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
                     Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8)),
+                    Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
                 ]);
                 Ok(result)
             } else {
