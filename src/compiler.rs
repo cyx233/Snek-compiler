@@ -24,15 +24,16 @@ fn depth(e: &Expr) -> i64 {
             .iter()
             .map(|(_, x)| depth(x))
             .max()
-            .unwrap()
+            .unwrap_or(0)
             .max(depth(e2) + e1.len() as i64),
+        Expr::UnOp(_, expr) => depth(expr),
         Expr::BinOp(_, e1, e2) => depth(e1).max(depth(e2) + 1),
         Expr::If(cond, e1, e2) => depth(cond).max(depth(e1)).max(depth(e2)),
         Expr::Loop(expr) => depth(expr),
         Expr::Break(expr) => depth(expr),
         Expr::Set(_, expr) => depth(expr),
-        Expr::Block(exprs) => exprs.iter().map(depth).max().unwrap(),
-        Expr::Call(_, exprs) => exprs.iter().map(depth).max().unwrap(),
+        Expr::Block(exprs) => exprs.iter().map(depth).max().unwrap_or(0),
+        Expr::Call(_, exprs) => exprs.iter().map(depth).max().unwrap_or(0),
         Expr::Print(expr) => depth(expr) + 1,
         _ => 0,
     }
@@ -44,7 +45,7 @@ fn compile_expr_to_instrs(
     state: &CompileState,
 ) -> Result<Vec<Instr>, String> {
     match e {
-        Expr::Number(n) => Ok(vec![Instr::IMov(state.result_target, Val::Imm(*n))]),
+        Expr::Number(n) => Ok(vec![Instr::IMov(state.result_target, Val::Int(*n))]),
         Expr::Boolean(b) => Ok(vec![Instr::IMov(state.result_target, Val::Boolean(*b))]),
         Expr::Input => {
             if state.in_defn {
@@ -133,7 +134,7 @@ fn compile_expr_to_instrs(
                     vec![
                         Instr::TypeTest(Val::Reg(Reg::RAX)),
                         Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                        Instr::IAdd(Val::Reg(Reg::RAX), Val::Imm(1)),
+                        Instr::IAdd(Val::Reg(Reg::RAX), Val::Int(1)),
                         Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
@@ -141,7 +142,7 @@ fn compile_expr_to_instrs(
                     vec![
                         Instr::TypeTest(Val::Reg(Reg::RAX)),
                         Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
-                        Instr::ISub(Val::Reg(Reg::RAX), Val::Imm(1)),
+                        Instr::ISub(Val::Reg(Reg::RAX), Val::Int(1)),
                         Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
@@ -170,11 +171,11 @@ fn compile_expr_to_instrs(
             Ok(result)
         }
         Expr::BinOp(op, e1, e2) => {
-            let e1_instrs = compile_expr_to_instrs(
+            let mut result = compile_expr_to_instrs(
                 e1,
                 label,
                 &CompileState {
-                    result_target: Val::Reg(Reg::RAX),
+                    result_target: Val::RegOffset(Reg::RSP, state.si),
                     ..*state
                 },
             )?;
@@ -190,7 +191,7 @@ fn compile_expr_to_instrs(
             let tc_instrs = match op {
                 // Op2::Eqaul accepts 2 Bool or 2 Int
                 Op2::Equal => vec![
-                    Instr::IMov(Val::RegOffset(Reg::RSP, state.si), Val::Reg(Reg::RAX)),
+                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IXor(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::TypeTest(Val::Reg(Reg::RAX)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
@@ -198,7 +199,7 @@ fn compile_expr_to_instrs(
                 ],
                 //other ops only accept Int
                 _ => vec![
-                    Instr::IMov(Val::RegOffset(Reg::RSP, state.si), Val::Reg(Reg::RAX)),
+                    Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IOr(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::TypeTest(Val::Reg(Reg::RAX)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
@@ -229,7 +230,6 @@ fn compile_expr_to_instrs(
                 ],
             };
 
-            let mut result = e1_instrs;
             result.extend(e2_instrs);
             result.extend(tc_instrs);
             result.extend(op_instrs);
@@ -331,13 +331,21 @@ fn compile_expr_to_instrs(
                         expr_vec.len()
                     ));
                 }
-                let mut result = vec![];
-                let mut si = -(expr_vec.len() as i64 + 1);
-                for expr in expr_vec {
+                let args_offset = *args_num as i64 + 1;
+                let nenv = state
+                    .env
+                    .iter()
+                    .map(|(name, si)| (name.clone(), si + args_offset))
+                    .collect::<HashMap<String, i64>>();
+                let mut si = 0;
+                let mut result = vec![Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8))];
+                for expr in expr_vec.iter().rev() {
                     let instrs = compile_expr_to_instrs(
                         expr,
                         label,
                         &CompileState {
+                            env: &nenv,
+                            si: state.si + args_offset,
                             result_target: Val::RegOffset(Reg::RSP, si),
                             ..*state
                         },
@@ -347,10 +355,10 @@ fn compile_expr_to_instrs(
                 }
                 result.extend(vec![
                     Instr::IMov(Val::RegOffset(Reg::RSP, si), Val::Reg(Reg::RDI)),
-                    Instr::SubRsp((expr_vec.len() + 1) as i64 * 8),
                     Instr::ICall(name.clone()),
+                    Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, si)),
                     Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
-                    Instr::AddRsp((expr_vec.len() + 1) as i64 * 8),
+                    Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8)),
                 ]);
                 Ok(result)
             } else {
@@ -378,7 +386,7 @@ pub fn compile_defn_to_instrs(
         }
 
         result.push(Instr::Label(name.clone()));
-        result.push(Instr::SubRsp(stack_depth * 8));
+        result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
         let expr = compile_expr_to_instrs(
             expr,
             label,
@@ -391,9 +399,8 @@ pub fn compile_defn_to_instrs(
                 in_defn: true,
             },
         )?;
-
         result.extend(expr);
-        result.push(Instr::AddRsp(stack_depth * 8));
+        result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
         result.push(Instr::Return());
         result.push(Instr::Empty());
     }
@@ -418,7 +425,7 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
 
     result.push(Instr::Label("our_code_starts_here".to_string()));
     let stack_depth = depth(expr);
-    result.push(Instr::SubRsp(stack_depth * 8));
+    result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
     let expr_instrs = compile_expr_to_instrs(
         expr,
         &mut label,
@@ -432,7 +439,7 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
         },
     )?;
     result.extend(expr_instrs);
-    result.push(Instr::AddRsp(stack_depth * 8));
+    result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
     result.push(Instr::Return());
     Ok(result)
 }

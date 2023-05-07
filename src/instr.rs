@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Val {
     Reg(Reg),
+    Int(i64),
     Imm(i64),
     Boolean(bool),
     RegOffset(Reg, i64),
@@ -43,8 +44,6 @@ pub enum Instr {
     ICall(String),
     Empty(),
     Return(),
-    AddRsp(i64),
-    SubRsp(i64),
 }
 
 impl Reg {
@@ -61,7 +60,8 @@ impl Reg {
 impl Val {
     fn to_string(&self) -> String {
         match self {
-            Val::Imm(n) => (n << 1).to_string(),
+            Val::Int(n) => (n << 1).to_string(),
+            Val::Imm(n) => n.to_string(),
             Val::Boolean(b) => {
                 if *b {
                     "3".to_string()
@@ -119,6 +119,12 @@ impl Instr {
                     Val::RegOffset(_, _) => {
                         format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
                     }
+                    Val::Imm(n) if *n > i32::MAX as i64 || *n < i32::MIN as i64 => {
+                        format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
+                    }
+                    Val::Int(n) if (n << 1) > i32::MAX as i64 || (n << 1) < i32::MIN as i64 => {
+                        format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
+                    }
                     _ => format!("\tmov qword {},{}", v1.to_string(), v2.to_string()),
                 },
             },
@@ -156,8 +162,6 @@ impl Instr {
             Instr::ICall(name) => format!("\tcall {}", name),
             Instr::Empty() => ";".to_string(),
             Instr::Return() => "\tret".to_string(),
-            Instr::AddRsp(n) if *n > 0 => format!("\tadd rsp,{}", n),
-            Instr::SubRsp(n) if *n > 0 => format!("\tsub rsp,{}", n),
             _ => "".to_string(),
         }
     }
