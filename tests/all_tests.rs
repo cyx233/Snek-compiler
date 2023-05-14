@@ -341,6 +341,45 @@ success_tests! {
         input: "9",
         expected: "9\nfalse\nfalse",
     },
+
+    // func test
+    {
+        name: ackermann_0,
+        file: "recursive_ackermann.snek",
+        input: "0",
+        expected: "5",
+    },
+    {
+        name: ackermann_10,
+        file: "recursive_ackermann.snek",
+        input: "10",
+        expected: "8189",
+    },
+    {
+        name: factorial,
+        file: "recursive_factorial.snek",
+        input: "5",
+        expected: "120",
+    },
+    {
+        name: fibonacci,
+        file: "recursive_fibonacci.snek",
+        input: "7",
+        expected: "13",
+    },
+    {
+        name: many_call,
+        file: "many_call.snek",
+        input: "7",
+        expected: "11",
+    },
+    {
+        name: many_print,
+        file: "many_print.snek",
+        input: "7",
+        expected: "7\n7\n7\n7\n7",
+    },
+
 }
 
 runtime_error_tests! {
