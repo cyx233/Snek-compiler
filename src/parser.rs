@@ -1,3 +1,4 @@
+use crate::syntax::*;
 use lazy_static::lazy_static;
 use regex::Regex;
 use sexp::Atom::*;
@@ -5,42 +6,6 @@ use sexp::*;
 
 lazy_static! {
     static ref ID_REGEX: Regex = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-}
-
-#[derive(Debug)]
-pub enum Expr {
-    Number(i64),
-    Boolean(bool),
-    Id(String),
-    Let(Vec<(String, Expr)>, Box<Expr>),
-    UnOp(Op1, Box<Expr>),
-    BinOp(Op2, Box<Expr>, Box<Expr>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
-    Loop(Box<Expr>),
-    Break(Box<Expr>),
-    Set(String, Box<Expr>),
-    Block(Vec<Expr>),
-    Input,
-}
-
-#[derive(Debug)]
-pub enum Op1 {
-    Add1,
-    Sub1,
-    IsNum,
-    IsBool,
-}
-
-#[derive(Debug)]
-pub enum Op2 {
-    Plus,
-    Minus,
-    Times,
-    Equal,
-    Greater,
-    GreaterEqual,
-    Less,
-    LessEqual,
 }
 
 fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
@@ -94,8 +59,8 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
         },
         Sexp::List(vec) => match &vec[..] {
             // Block
-            [Sexp::Atom(S(op)), ..] if op == "block" => {
-                let result = vec[1..]
+            [Sexp::Atom(S(op)), rest @ ..] if op == "block" => {
+                let result = rest
                     .iter()
                     .map(parse_expr)
                     .collect::<Result<Vec<Expr>, String>>()?;
@@ -136,12 +101,18 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(else_expr),
                 ))
             }
-            // (<op>, <expr>) => Block, Loop, Break, UnOp
-            [Sexp::Atom(S(op)), e] => {
+            // (<unop>, <expr>) => Loop, Break, UnOp
+            [Sexp::Atom(S(op)), e]
+                if matches!(
+                    op.as_str(),
+                    "loop" | "break" | "add1" | "sub1" | "isnum" | "isbool" | "print"
+                ) =>
+            {
                 let e_expr = parse_expr(e)?;
                 match op.as_str() {
                     "loop" => Ok(Expr::Loop(Box::new(e_expr))),
                     "break" => Ok(Expr::Break(Box::new(e_expr))),
+                    "print" => Ok(Expr::Print(Box::new(e_expr))),
                     "add1" => Ok(Expr::UnOp(Op1::Add1, Box::new(e_expr))),
                     "sub1" => Ok(Expr::UnOp(Op1::Sub1, Box::new(e_expr))),
                     "isnum" => Ok(Expr::UnOp(Op1::IsNum, Box::new(e_expr))),
@@ -149,8 +120,10 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     _ => Err(format!("Invalid operator {}", op)),
                 }
             }
-            // (<op>, <expr>, <expr>) => BinOp
-            [Sexp::Atom(S(op)), e1, e2] => {
+            // (<binop>, <expr>, <expr>) => BinOp
+            [Sexp::Atom(S(op)), e1, e2]
+                if matches!(op.as_str(), "+" | "-" | "*" | ">" | "<" | ">=" | "<=" | "=") =>
+            {
                 let expr_op = match op.as_str() {
                     "+" => Op2::Plus,
                     "-" => Op2::Minus,
@@ -170,18 +143,106 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(e2_instrs),
                 ))
             }
+            [Sexp::Atom(S(func)), args @ ..] => {
+                let exprs = args
+                    .iter()
+                    .map(parse_expr)
+                    .collect::<Result<Vec<Expr>, String>>()?;
+                Ok(Expr::Call(func.to_string(), exprs))
+            }
             _ => Err("Invalid Syntax: Sexp::List".to_string()),
         },
         _ => Err("Invalid Syntax: Sexp".to_string()),
     }
 }
 
-pub fn parse_code(s: &String) -> Expr {
-    match parse(s) {
-        Ok(sexpr) => match parse_expr(&sexpr) {
-            Ok(expr) => expr,
+fn parse_defn(s_defns: Vec<Sexp>) -> Result<Vec<Defn>, String> {
+    s_defns
+        .iter()
+        .map(|s| match s {
+            Sexp::List(vec) => match &vec[..] {
+                [Sexp::Atom(S(op)), Sexp::List(v), s_expr] if op == "fun" => {
+                    let e = parse_expr(s_expr)?;
+                    let names = v
+                        .iter()
+                        .map(|n| match n {
+                            Sexp::Atom(S(name)) => Ok(name.clone()),
+                            _ => Err("Bad Defn Syntax: name must be String".to_string()),
+                        })
+                        .collect::<Result<Vec<String>, String>>()?;
+                    if names.is_empty() {
+                        Err("Bad Defn Syntax: names is empty".to_string())
+                    } else {
+                        Ok(Defn::Func(
+                            names[0].clone(),
+                            names[1..names.len()].to_vec(),
+                            Box::new(e),
+                        ))
+                    }
+                }
+                _ => Err("Bad Defn Syntax".to_string()),
+            },
+            _ => Err("Bad Defn Syntax".to_string()),
+        })
+        .collect::<Result<Vec<Defn>, String>>()
+}
+
+fn split_by_parentheses(s: &str) -> Vec<String> {
+    let mut s_expressions = vec![];
+    let mut stack = 0;
+    let mut start = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '(' => {
+                if stack == 0 {
+                    start = i;
+                }
+                stack += 1;
+            }
+            ')' => {
+                stack -= 1;
+                if stack == 0 {
+                    s_expressions.push(s[start..=i].to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    s_expressions
+}
+
+fn split_defn_expr(s: &String) -> Result<(Vec<Sexp>, Sexp), String> {
+    let groups = split_by_parentheses(s)
+        .iter()
+        .filter(|x| !x.is_empty())
+        .map(|x| parse(x))
+        .collect::<Result<Vec<Sexp>, Box<sexp::Error>>>()
+        .map_err(|e| e.to_string())?;
+
+    if groups.is_empty() {
+        let sexpr = parse(s).map_err(|e| e.to_string())?;
+        Ok((vec![], sexpr))
+    } else {
+        if let Some((last, rest)) = groups.split_last() {
+            Ok((rest.to_vec(), last.clone()))
+        } else {
+            Err("Bad Syntax: Prog".to_string())
+        }
+    }
+}
+
+fn parse_prog(s_defns: Vec<Sexp>, s_expr: &Sexp) -> Result<Prog, String> {
+    let defns = parse_defn(s_defns)?;
+    let expr = parse_expr(s_expr)?;
+    return Ok(Prog::Prog(defns, Box::new(expr)));
+}
+
+pub fn parse_code(s: &String) -> Prog {
+    match split_defn_expr(s) {
+        Ok((s_defns, s_expr)) => match parse_prog(s_defns, &s_expr) {
+            Ok(prog) => prog,
             Err(msg) => {
-                panic!("Parse Failed. {}", msg)
+                panic!("Invalid Parse. {}", msg)
             }
         },
         Err(msg) => {

@@ -1,13 +1,26 @@
+use crate::compiler::compile;
 use crate::errors::*;
-use crate::instr::compile;
 use crate::parser::parse_code;
 use std::fs::File;
 use std::io::prelude::*;
 use std::{env, vec};
 
+mod compiler;
 mod errors;
 mod instr;
 mod parser;
+mod syntax;
+
+fn get_err_instrs(label: &String, errcode: i64) -> String {
+    let code_instr = format!("\tmov rdi,{}", errcode);
+    vec![
+        (label.clone() + ":").as_str(),
+        code_instr.as_str(),
+        "\tand rsp, -16",
+        "\tcall snek_error",
+    ]
+    .join("\n")
+}
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -22,21 +35,20 @@ fn main() -> std::io::Result<()> {
     let expr = parse_code(&in_contents);
     let result = compile(&expr);
 
-    let invalid_arg_instr = format!("\tmov rdi,{}\n\tjmp snek_error", *ERR_INVALID_ARG_CODE);
+    let invalid_arg_instr = get_err_instrs(&ERR_INVALID_ARG_LABEL, *ERR_INVALID_ARG_CODE);
 
-    let overflow_intrs = format!("\tmov rdi,{}\n\tjmp snek_error", *ERR_OVERFLOW_CODE);
+    let overflow_intrs = get_err_instrs(&ERR_OVERFLOW_LABEL, *ERR_OVERFLOW_CODE);
 
     let asm_program = vec![
         "section .text",
         "extern snek_error",
+        "extern snek_print",
         "global our_code_starts_here",
-        &(ERR_OVERFLOW_LABEL.clone() + ":"),
-        &overflow_intrs,
-        &(ERR_INVALID_ARG_LABEL.clone() + ":"),
-        &invalid_arg_instr,
-        "our_code_starts_here:",
         &result,
-        "\tret",
+        ";",
+        &overflow_intrs,
+        ";",
+        &invalid_arg_instr,
     ]
     .join("\n");
 

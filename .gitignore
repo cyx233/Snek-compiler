@@ -5,3 +5,5 @@
 *.s
 Cargo.lock
 .vscode
+/tests/*.[soa]
+/tests/*.run
