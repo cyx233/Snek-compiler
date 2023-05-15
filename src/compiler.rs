@@ -89,7 +89,7 @@ fn compile_expr_to_instrs(
             None => Err(format!("Unbound variable identifier {id}")),
         },
         Expr::Let(bindings, body) => {
-            let mut result: Vec<Instr> = Vec::new();
+            let mut result = vec![Instr::Info("===== binding begin =====".to_string())];
             let mut nenv: HashMap<String, i64> = state.env.clone();
             let mut cur_ids: HashSet<String> = HashSet::new();
             let mut cur_si = state.si;
@@ -110,10 +110,12 @@ fn compile_expr_to_instrs(
                     )?;
                     cur_ids.insert(id.clone());
                     nenv.insert(id.clone(), cur_si - state.env_offset);
+                    result.push(Instr::Info(format!(" {}", id)));
                     result.extend(bind_instrs);
                     cur_si += 1;
                 }
             }
+            result.push(Instr::Info("===== binding end =====".to_string()));
             let body_instrs = compile_expr_to_instrs(
                 &body,
                 label,
@@ -127,10 +129,10 @@ fn compile_expr_to_instrs(
             Ok(result)
         }
         Expr::Print(expr) => {
-            let mut result = vec![Instr::IMov(
-                Val::RegOffset(Reg::RSP, state.si),
-                Val::Reg(Reg::RDI),
-            )];
+            let mut result = vec![
+                Instr::Info("===== print begin =====".to_string()),
+                Instr::IMov(Val::RegOffset(Reg::RSP, state.si), Val::Reg(Reg::RDI)),
+            ];
             let e_instrs = compile_expr_to_instrs(
                 expr,
                 label,
@@ -151,6 +153,7 @@ fn compile_expr_to_instrs(
                 Instr::IMov(Val::Reg(Reg::RSP), Val::RegOffset(Reg::RSP, 0)),
                 Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
                 Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, state.si)),
+                Instr::Info("===== print end =====".to_string()),
             ]);
             Ok(result)
         }
@@ -371,7 +374,7 @@ fn compile_expr_to_instrs(
                     ));
                 }
                 let args_offset = *args_num as i64 + 1;
-                let mut result = vec![];
+                let mut result = vec![Instr::Info("===== call begin =====".to_string())];
 
                 if state.tail && state.cur_name.eq(name) {
                     // tail recursion
@@ -444,6 +447,7 @@ fn compile_expr_to_instrs(
                 }
                 // move the result
                 result.push(Instr::IMov(state.result_target, Val::Reg(Reg::RAX)));
+                result.push(Instr::Info("===== call end =====".to_string()));
                 Ok(result)
             } else {
                 Err(format!("Undefined func {}", name))
@@ -494,7 +498,7 @@ pub fn compile_defn_to_instrs(
             result.push(Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
         }
         result.push(Instr::Return());
-        result.push(Instr::Empty());
+        result.push(Instr::Info("".to_string()));
     }
     Ok(result)
 }

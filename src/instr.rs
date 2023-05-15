@@ -43,7 +43,7 @@ pub enum Instr {
     SetIfElse(Reg, Val, Val, CondFlag),
     JumpIf(String, CondFlag),
     ICall(String),
-    Empty(),
+    Info(String),
     Return(),
 }
 
@@ -162,7 +162,7 @@ impl Instr {
                 _ => format!("\t{} {}", cond.to_jmpop(), *v),
             },
             Instr::ICall(name) => format!("\tcall {}", name),
-            Instr::Empty() => ";".to_string(),
+            Instr::Info(msg) => ";".to_string() + msg,
             Instr::Return() => "\tret".to_string(),
             _ => "".to_string(),
         }
