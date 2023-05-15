@@ -26,6 +26,9 @@ pub enum Expr {
     Block(Vec<Expr>),
     Call(String, Vec<Expr>),
     Input,
+    Index(Box<Expr>, Box<Expr>),
+    Tuple(Vec<Expr>),
+    SetIndex(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug)]

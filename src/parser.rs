@@ -27,6 +27,9 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
                         | "sub1"
                         | "isnum"
                         | "isbool"
+                        | "tuple"
+                        | "index!"
+                        | "setindex!"
                 ) {
                     Err(format!("Invalid Id: can't be a keyword \"{}\"", id))
                 } else if ID_REGEX.is_match(id) {
@@ -58,19 +61,28 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             _ => Ok(Expr::Id(id.clone())),
         },
         Sexp::List(vec) => match &vec[..] {
-            // Block
-            [Sexp::Atom(S(op)), rest @ ..] if op == "block" => {
+            // op <expr>+ => Block/Tuple
+            [Sexp::Atom(S(op)), rest @ ..] if matches!(op.as_str(), "block" | "tuple") => {
                 let result = rest
                     .iter()
                     .map(parse_expr)
                     .collect::<Result<Vec<Expr>, String>>()?;
+
                 if !result.is_empty() {
-                    Ok(Expr::Block(result))
+                    Ok(if op == "block" {
+                        Expr::Block(result)
+                    } else {
+                        Expr::Tuple(result)
+                    })
                 } else {
-                    Err("Invalid Syntax: empty Block".to_string())
+                    Err(format!("Invalid Syntax: empty {}", op))
                 }
             }
-            // (let, <bindings>, <expr>) => Let
+            // index <expr> <expr> => index
+            [Sexp::Atom(S(op)), tuple_sexp, index_sexp] if op == "index!" => {
+                unimplemented!("index parse")
+            }
+            // let, <bindings>, <expr> => Let
             [Sexp::Atom(S(op)), e1, e2] if op == "let" => match e1 {
                 Sexp::List(bindings) if !bindings.is_empty() => {
                     let env = bindings
@@ -90,6 +102,10 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                 let e_instrs = parse_expr(e)?;
                 Ok(Expr::Set(id.clone(), Box::new(e_instrs)))
             }
+            // setindex! <expr> <expr> <expr> => SetIndex
+            [Sexp::Atom(S(op)), tuple_sexp, index_sexp, value_sexp] if op == "setindex!" => {
+                unimplemented!("setindex parse")
+            }
             // if <expr> <expr> <expr> => If
             [Sexp::Atom(S(op)), cond, if_sexp, else_sexp] if op == "if" => {
                 let cond_expr = parse_expr(cond)?;
@@ -101,7 +117,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(else_expr),
                 ))
             }
-            // (<unop>, <expr>) => Loop, Break, UnOp
+            // <unop>, <expr> => Loop, Break, UnOp
             [Sexp::Atom(S(op)), e]
                 if matches!(
                     op.as_str(),
@@ -120,7 +136,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     _ => Err(format!("Invalid operator {}", op)),
                 }
             }
-            // (<binop>, <expr>, <expr>) => BinOp
+            // <binop>, <expr>, <expr> => BinOp
             [Sexp::Atom(S(op)), e1, e2]
                 if matches!(op.as_str(), "+" | "-" | "*" | ">" | "<" | ">=" | "<=" | "=") =>
             {
@@ -143,6 +159,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     Box::new(e2_instrs),
                 ))
             }
+            // <func>
             [Sexp::Atom(S(func)), args @ ..] => {
                 let exprs = args
                     .iter()
@@ -220,8 +237,8 @@ fn split_defn_expr(s: &String) -> Result<(Vec<Sexp>, Sexp), String> {
         .map_err(|e| e.to_string())?;
 
     if groups.is_empty() {
-        let sexpr = parse(s).map_err(|e| e.to_string())?;
-        Ok((vec![], sexpr))
+        let sexp = parse(s).map_err(|e| e.to_string())?;
+        Ok((vec![], sexp))
     } else {
         if let Some((last, rest)) = groups.split_last() {
             Ok((rest.to_vec(), last.clone()))
@@ -246,7 +263,7 @@ pub fn parse_code(s: &String) -> Prog {
             }
         },
         Err(msg) => {
-            panic!("Invalid Sexpr. {}", msg)
+            panic!("Invalid Sexp. {}", msg)
         }
     }
 }

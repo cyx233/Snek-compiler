@@ -229,11 +229,12 @@ fn compile_expr_to_instrs(
                 },
             )?;
             let tc_instrs = match op {
-                // Op2::Eqaul accepts 2 Bool or 2 Int
+                // Op2::Eqaul accepts 2 values of the same type
                 Op2::Equal => vec![
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IXor(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::IntTest(Val::Reg(Reg::RAX)),
+                    Instr::IAnd(Val::Reg(Reg::RAX), Val::Imm(3)),
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::Imm(0)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                 ],
@@ -452,6 +453,15 @@ fn compile_expr_to_instrs(
             } else {
                 Err(format!("Undefined func {}", name))
             }
+        }
+        Expr::Tuple(exprs) => {
+            unimplemented!("tuple compile")
+        }
+        Expr::SetIndex(tuple_expr, index, value_expr) => {
+            unimplemented!("setindex compile")
+        }
+        Expr::Index(tuple_expr, index) => {
+            unimplemented!("index compile")
         }
     }
 }
