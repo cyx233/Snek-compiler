@@ -5,11 +5,15 @@ use im::{HashMap, HashSet};
 
 struct CompileState<'a> {
     si: i64,
+    cur_name: &'a String,
+    stack_depth: i64,
     env: &'a HashMap<String, i64>,
+    env_offset: i64,
     funcs: &'a HashMap<String, u64>,
     break_target: &'a String,
     result_target: Val,
     in_defn: bool,
+    tail: bool,
 }
 
 fn new_label(label: &mut u64, s: String) -> String {
@@ -18,23 +22,46 @@ fn new_label(label: &mut u64, s: String) -> String {
     format!("{s}_{current}")
 }
 
-fn depth(e: &Expr) -> i64 {
+fn depth(e: &Expr, tail: bool, cur_name: &String) -> i64 {
     match e {
         Expr::Let(e1, e2) => e1
             .iter()
-            .map(|(_, x)| depth(x))
+            .map(|(_, x)| depth(x, false, cur_name))
             .max()
             .unwrap_or(0)
-            .max(depth(e2) + e1.len() as i64),
-        Expr::UnOp(_, expr) => depth(expr),
-        Expr::BinOp(_, e1, e2) => depth(e1).max(depth(e2) + 1),
-        Expr::If(cond, e1, e2) => depth(cond).max(depth(e1)).max(depth(e2)),
-        Expr::Loop(expr) => depth(expr),
-        Expr::Break(expr) => depth(expr),
-        Expr::Set(_, expr) => depth(expr),
-        Expr::Block(exprs) => exprs.iter().map(depth).max().unwrap_or(0),
-        Expr::Call(_, exprs) => exprs.iter().map(depth).max().unwrap_or(0),
-        Expr::Print(expr) => depth(expr) + 1,
+            .max(depth(e2, tail, cur_name) + e1.len() as i64),
+        Expr::UnOp(_, expr) => depth(expr, false, cur_name),
+        Expr::BinOp(_, e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
+        Expr::If(cond, e1, e2) => depth(cond, false, cur_name)
+            .max(depth(e1, tail, cur_name))
+            .max(depth(e2, tail, cur_name)),
+        Expr::Loop(expr) => depth(expr, tail, cur_name),
+        Expr::Break(expr) => depth(expr, tail, cur_name),
+        Expr::Set(_, expr) => depth(expr, tail, cur_name),
+        Expr::Block(exprs) => {
+            if let Some((last, rest)) = exprs.split_last() {
+                rest.iter()
+                    .map(|x| depth(x, false, cur_name))
+                    .max()
+                    .unwrap_or(0)
+                    .max(depth(last, tail, cur_name))
+            } else {
+                0
+            }
+        }
+        Expr::Call(name, exprs) => {
+            exprs
+                .iter()
+                .map(|x| depth(x, false, name))
+                .max()
+                .unwrap_or(0)
+                + if tail && cur_name.eq(name) {
+                    exprs.len() as i64
+                } else {
+                    0
+                }
+        }
+        Expr::Print(expr) => depth(expr, false, cur_name) + 1,
         _ => 0,
     }
 }
@@ -57,7 +84,7 @@ fn compile_expr_to_instrs(
         Expr::Id(id) => match state.env.get(id) {
             Some(n) => Ok(vec![Instr::IMov(
                 state.result_target,
-                Val::RegOffset(Reg::RSP, *n),
+                Val::RegOffset(Reg::RSP, *n + state.env_offset),
             )]),
             None => Err(format!("Unbound variable identifier {id}")),
         },
@@ -77,11 +104,12 @@ fn compile_expr_to_instrs(
                             si: cur_si,
                             env: &nenv,
                             result_target: Val::RegOffset(Reg::RSP, cur_si),
+                            tail: false,
                             ..*state
                         },
                     )?;
                     cur_ids.insert(id.clone());
-                    nenv.insert(id.clone(), cur_si);
+                    nenv.insert(id.clone(), cur_si - state.env_offset);
                     result.extend(bind_instrs);
                     cur_si += 1;
                 }
@@ -109,6 +137,7 @@ fn compile_expr_to_instrs(
                 &CompileState {
                     si: state.si + 1,
                     result_target: Val::Reg(Reg::RDI),
+                    tail: false,
                     ..*state
                 },
             )?;
@@ -131,6 +160,7 @@ fn compile_expr_to_instrs(
                 label,
                 &CompileState {
                     result_target: Val::Reg(Reg::RAX),
+                    tail: false,
                     ..*state
                 },
             )?;
@@ -181,6 +211,7 @@ fn compile_expr_to_instrs(
                 label,
                 &CompileState {
                     result_target: Val::RegOffset(Reg::RSP, state.si),
+                    tail: false,
                     ..*state
                 },
             )?;
@@ -190,6 +221,7 @@ fn compile_expr_to_instrs(
                 &CompileState {
                     si: state.si + 1,
                     result_target: Val::Reg(Reg::RCX),
+                    tail: false,
                     ..*state
                 },
             )?;
@@ -249,6 +281,7 @@ fn compile_expr_to_instrs(
                 label,
                 &CompileState {
                     result_target: Val::Reg(Reg::RAX),
+                    tail: false,
                     ..*state
                 },
             )?;
@@ -297,7 +330,7 @@ fn compile_expr_to_instrs(
         }
         Expr::Set(id, expr) => {
             let set_target = match state.env.get(id) {
-                Some(n) => Ok(Val::RegOffset(Reg::RSP, *n)),
+                Some(n) => Ok(Val::RegOffset(Reg::RSP, *n + state.env_offset)),
                 None => Err(format!("Unbound variable identifier {id}")),
             }?;
             let e_instrs = compile_expr_to_instrs(
@@ -317,6 +350,7 @@ fn compile_expr_to_instrs(
             let mut result = Vec::new();
             let default_state = CompileState {
                 result_target: Val::Reg(Reg::RAX),
+                tail: false,
                 ..*state
             };
             for expr in &expr_vec[..(expr_vec.len() - 1)] {
@@ -337,34 +371,79 @@ fn compile_expr_to_instrs(
                     ));
                 }
                 let args_offset = *args_num as i64 + 1;
-                let nenv = state
-                    .env
-                    .iter()
-                    .map(|(name, si)| (name.clone(), si + args_offset))
-                    .collect::<HashMap<String, i64>>();
-                let mut si = 0;
-                let mut result = vec![Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8))];
-                for expr in expr_vec {
-                    let instrs = compile_expr_to_instrs(
-                        expr,
-                        label,
-                        &CompileState {
-                            env: &nenv,
-                            si: state.si + args_offset,
-                            result_target: Val::RegOffset(Reg::RSP, si),
-                            ..*state
-                        },
-                    )?;
-                    si += 1;
-                    result.extend(instrs);
+                let mut result = vec![];
+
+                if state.tail && state.cur_name.eq(name) {
+                    // tail recursion
+                    // store arguments
+                    for (i, expr) in expr_vec.iter().enumerate() {
+                        let instrs = compile_expr_to_instrs(
+                            expr,
+                            label,
+                            &CompileState {
+                                cur_name: name,
+                                si: state.si + i as i64,
+                                result_target: Val::RegOffset(Reg::RSP, state.si + i as i64),
+                                tail: false,
+                                ..*state
+                            },
+                        )?;
+                        result.extend(instrs);
+                    }
+                    // load arguments
+                    for i in 0..expr_vec.len() as i64 {
+                        result.push(Instr::IMov(
+                            Val::RegOffset(Reg::RSP, state.stack_depth + i + 1),
+                            Val::RegOffset(Reg::RSP, state.si + i),
+                        ));
+                    }
+                    // reuse stack
+                    // call and restore stack
+                    // don't need to save rdi twice here, restore rdi directly from old stack
+                    result.extend(vec![
+                        Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(state.stack_depth * 8)),
+                        Instr::JumpIf(name.clone(), CondFlag::Always),
+                        Instr::IMov(
+                            Val::Reg(Reg::RDI),
+                            Val::RegOffset(Reg::RSP, args_offset - 1),
+                        ),
+                        Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(state.stack_depth * 8)),
+                    ]);
+                } else {
+                    // allocate stack
+                    result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8)));
+                    // load to destination directly
+                    for (i, expr) in expr_vec.iter().enumerate() {
+                        let instrs = compile_expr_to_instrs(
+                            expr,
+                            label,
+                            &CompileState {
+                                env_offset: state.env_offset + args_offset,
+                                cur_name: name,
+                                si: state.si + args_offset,
+                                result_target: Val::RegOffset(Reg::RSP, i as i64),
+                                tail: false,
+                                ..*state
+                            },
+                        )?;
+                        result.extend(instrs);
+                    }
+                    // call and restore stack
+                    result.extend(vec![
+                        Instr::IMov(
+                            Val::RegOffset(Reg::RSP, args_offset - 1),
+                            Val::Reg(Reg::RDI),
+                        ),
+                        Instr::ICall(name.clone()),
+                        Instr::IMov(
+                            Val::Reg(Reg::RDI),
+                            Val::RegOffset(Reg::RSP, args_offset - 1),
+                        ),
+                        Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8)),
+                    ]);
                 }
-                result.extend(vec![
-                    Instr::IMov(Val::RegOffset(Reg::RSP, si), Val::Reg(Reg::RDI)),
-                    Instr::ICall(name.clone()),
-                    Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, si)),
-                    Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(args_offset * 8)),
-                    Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
-                ]);
+                // move the result
+                result.push(Instr::IMov(state.result_target, Val::Reg(Reg::RAX)));
                 Ok(result)
             } else {
                 Err(format!("Undefined func {}", name))
@@ -380,16 +459,16 @@ pub fn compile_defn_to_instrs(
 ) -> Result<Vec<Instr>, String> {
     let mut result: Vec<Instr> = vec![];
     for Defn::Func(name, args, expr) in defns {
-        let stack_depth = depth(expr);
         let env = args
             .iter()
             .enumerate()
-            .map(|(i, name)| (name.clone(), i as i64 + stack_depth + 1))
+            .map(|(i, name)| (name.clone(), i as i64))
             .collect::<HashMap<String, i64>>();
         if env.len() != args.len() {
             return Err("Duplicate names of parameters".to_string());
         }
 
+        let stack_depth = depth(expr, true, name);
         result.push(Instr::Label(name.clone()));
         if stack_depth > 0 {
             result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
@@ -399,11 +478,15 @@ pub fn compile_defn_to_instrs(
             label,
             &CompileState {
                 si: 0,
+                cur_name: name,
+                stack_depth: stack_depth,
                 env: &env,
+                env_offset: stack_depth + 1,
                 funcs: funcs,
                 break_target: &"".to_string(),
                 result_target: Val::Reg(Reg::RAX),
                 in_defn: true,
+                tail: true,
             },
         )?;
         result.extend(expr);
@@ -433,7 +516,7 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
     result.extend(defn_instrs);
 
     result.push(Instr::Label("our_code_starts_here".to_string()));
-    let stack_depth = depth(expr);
+    let stack_depth = depth(expr, true, &"our_code_starts_here".to_string());
     if stack_depth > 0 {
         result.push(Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(stack_depth * 8)));
     }
@@ -442,11 +525,15 @@ pub fn compile_prog_to_instrs(prog: &Prog) -> Result<Vec<Instr>, String> {
         &mut label,
         &CompileState {
             si: 0,
+            cur_name: &"our_code_starts_here".to_string(),
+            stack_depth: stack_depth,
             env: &HashMap::<String, i64>::new(),
+            env_offset: 0,
             funcs: &funcs,
             break_target: &"".to_string(),
             result_target: Val::Reg(Reg::RAX),
             in_defn: false,
+            tail: true,
         },
     )?;
     result.extend(expr_instrs);
