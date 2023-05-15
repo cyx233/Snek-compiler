@@ -142,7 +142,7 @@ impl Instr {
             Instr::IAdd(v1, v2) => format!("\tadd {},{}", v1.to_string(), v2.to_string()),
             Instr::ISub(v1, v2) => format!("\tsub {},{}", v1.to_string(), v2.to_string()),
             Instr::IMul(v1, v2) => format!(
-                "\tsar {},1\n\timul {},{}",
+                "\tsar {},2\n\timul {},{}",
                 v1.to_string(),
                 v1.to_string(),
                 v2.to_string()

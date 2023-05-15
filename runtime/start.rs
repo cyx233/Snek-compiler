@@ -22,7 +22,7 @@ fn snek_error(errcode: i64) {
 #[export_name = "\x01snek_print"]
 fn snek_print(val: i64) -> i64 {
     match val {
-        3 => println!("true"),
+        5 => println!("true"),
         1 => println!("false"),
         n if n & 1 == 0 => println!("{}", val >> 2),
         _ => println!("Unknown value: {}", val),
@@ -41,7 +41,7 @@ fn parse_input(input: &str) -> i64 {
 
 fn print_value(i: i64) {
     match i {
-        3 => println!("true"),
+        5 => println!("true"),
         1 => println!("false"),
         _ => println!("{}", i >> 2),
     }
