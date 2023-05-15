@@ -2,6 +2,8 @@
 pub enum Val {
     Reg(Reg),
     Int(i64),
+    TupleItem(i64, i64),
+    TupleLen(i64),
     Imm(i64),
     Boolean(bool),
     RegOffset(Reg, i64),
@@ -38,7 +40,9 @@ pub enum Instr {
     IOr(Val, Val),
     IAnd(Val, Val),
     Label(String),
-    TypeTest(Val),
+    IntTest(Val),
+    BoolTest(Val),
+    TupleTest(Val),
     Cmp(Val, Val),
     SetIfElse(Reg, Val, Val, CondFlag),
     JumpIf(String, CondFlag),
@@ -61,14 +65,20 @@ impl Reg {
 impl Val {
     fn to_string(&self) -> String {
         match self {
-            Val::Int(n) => (n << 1).to_string(),
+            Val::Int(n) => (n << 2).to_string(),
             Val::Imm(n) => n.to_string(),
             Val::Boolean(b) => {
                 if *b {
-                    "3".to_string()
+                    "5".to_string()
                 } else {
                     "1".to_string()
                 }
+            }
+            Val::TupleItem(addr, index) => {
+                unimplemented!("tuple item")
+            }
+            Val::TupleLen(addr) => {
+                unimplemented!("tuple len")
             }
             Val::Reg(reg) => reg.to_string(),
             Val::RegOffset(reg, offset) => {
@@ -123,7 +133,7 @@ impl Instr {
                     Val::Imm(n) if *n > i32::MAX as i64 || *n < i32::MIN as i64 => {
                         format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
                     }
-                    Val::Int(n) if (n << 1) > i32::MAX as i64 || (n << 1) < i32::MIN as i64 => {
+                    Val::Int(n) if (n << 2) > i32::MAX as i64 || (n << 2) < i32::MIN as i64 => {
                         format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
                     }
                     _ => format!("\tmov qword {},{}", v1.to_string(), v2.to_string()),
@@ -141,8 +151,10 @@ impl Instr {
             Instr::IOr(v1, v2) => format!("\tor {},{}", v1.to_string(), v2.to_string()),
             Instr::IAnd(v1, v2) => format!("\tand {},{}", v1.to_string(), v2.to_string()),
             Instr::Label(name) => format!("{}:", name.clone()),
-            // Bool => 1, Int => 0
-            Instr::TypeTest(v) => format!("\ttest {},1", v.to_string()),
+            // Int => 00, Bool => 01, Tuple => 10
+            Instr::IntTest(v) => format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,0", v.to_string()),
+            Instr::BoolTest(v) => format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,1", v.to_string()),
+            Instr::TupleTest(v) => format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,2", v.to_string()),
             Instr::Cmp(v1, v2) => format!("\tcmp {},{}", v1.to_string(), v2.to_string()),
             // reg = cond ? true_v : false_v
             Instr::SetIfElse(reg, true_v, false_v, cond) => match cond {

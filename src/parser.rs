@@ -45,7 +45,7 @@ fn parse_bind(s: &Sexp) -> Result<(String, Expr), String> {
 fn parse_expr(s: &Sexp) -> Result<Expr, String> {
     match s {
         Sexp::Atom(I(n)) => {
-            if *n < -4611686018427387904 || *n > 4611686018427387903 {
+            if *n < -2305843009213693952 || *n > 2305843009213693952 {
                 Err("Invalid number: overflow".to_string())
             } else {
                 Ok(Expr::Number(*n))

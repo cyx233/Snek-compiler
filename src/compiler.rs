@@ -170,7 +170,7 @@ fn compile_expr_to_instrs(
             let op_instrs = match op {
                 Op1::Add1 => {
                     vec![
-                        Instr::TypeTest(Val::Reg(Reg::RAX)),
+                        Instr::IntTest(Val::Reg(Reg::RAX)),
                         Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                         Instr::IAdd(Val::Reg(Reg::RAX), Val::Int(1)),
                         Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
@@ -178,14 +178,14 @@ fn compile_expr_to_instrs(
                 }
                 Op1::Sub1 => {
                     vec![
-                        Instr::TypeTest(Val::Reg(Reg::RAX)),
+                        Instr::IntTest(Val::Reg(Reg::RAX)),
                         Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                         Instr::ISub(Val::Reg(Reg::RAX), Val::Int(1)),
                         Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
                 Op1::IsNum => vec![
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IntTest(Val::Reg(Reg::RAX)),
                     Instr::SetIfElse(
                         Reg::RAX,
                         Val::Boolean(true),
@@ -194,7 +194,7 @@ fn compile_expr_to_instrs(
                     ),
                 ],
                 Op1::IsBool => vec![
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IntTest(Val::Reg(Reg::RAX)),
                     Instr::SetIfElse(
                         Reg::RAX,
                         Val::Boolean(true),
@@ -233,7 +233,7 @@ fn compile_expr_to_instrs(
                 Op2::Equal => vec![
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IXor(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IntTest(Val::Reg(Reg::RAX)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                 ],
@@ -241,7 +241,7 @@ fn compile_expr_to_instrs(
                 _ => vec![
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IOr(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IntTest(Val::Reg(Reg::RAX)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                 ],
