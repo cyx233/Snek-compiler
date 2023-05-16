@@ -464,8 +464,9 @@ fn compile_expr_to_instrs(
                         x,
                         label,
                         &CompileState {
+                            si: state.si + i as i64,
                             tail: false,
-                            result_target: Val::RegOffset(Reg::RSP, i as i64 + state.si),
+                            result_target: Val::RegOffset(Reg::RSP, state.si + i as i64),
                             ..*state
                         },
                     )
