@@ -173,8 +173,7 @@ impl Instr {
             .join("\n"),
             Instr::LenGuard(tuple_ptr, index) => [
                 format!("\tmov rbx,{}", tuple_ptr.to_string()),
-                // tuple format
-                "\tshr rbx,32".to_string(),
+                // [tuple] = len(tuple)
                 "\tmov rbx,[rbx]".to_string(),
                 format!("\tcmp rbx,{}", index.to_string()),
                 Instr::JumpIf(ERR_OUT_OF_BOUND_LABEL.clone(), CondFlag::LessEqual).to_string(),
@@ -206,12 +205,12 @@ impl Instr {
                 // validate bound
                 Instr::LenGuard(*ptr, *index).to_string(),
                 format!("\tmov rbx,{}", index.to_string()),
-                // int is ending with 00
-                "\tadd rbx,4".to_string(),
-                // 32(tuple format) + 3(1 byte) - 2 (int format) = 33
-                "\tshl rbx,33".to_string(),
+                // 3(1 byte offset) - 2(int format) = 1
+                "\tshl rbx,1".to_string(),
+                // [tuple] = len(tuple), item begin at [tuple+8]
+                "\tadd rbx,8".to_string(),
+                // tuple_ptr + 8*(index+1)
                 format!("\tadd rbx,{}", ptr.to_string()),
-                "\tshr rbx,32".to_string(),
                 format!("\tmov {},rbx", target.to_string()),
             ]
             .join("\n"),

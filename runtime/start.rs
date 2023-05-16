@@ -14,19 +14,42 @@ fn snek_error(errcode: i64) {
     match errcode {
         1 => eprintln!("invalid argument"),
         2 => eprintln!("overflow"),
+        4 => eprintln!("out of bound"),
         _ => eprintln!("Unknown Error {errcode}"),
     };
     std::process::exit(1);
 }
 
+fn snek_str(val: i64) -> String {
+    let type_bits = val & 3;
+    match type_bits {
+        1 => {
+            if val == 1 {
+                "false".to_string()
+            } else {
+                "true".to_string()
+            }
+        }
+        0 => {
+            format!("{}", val >> 2)
+        }
+        2 => {
+            let addr = (val - 1) as *const i64;
+            let len = unsafe { *addr as isize };
+            let mut items: Vec<String> = vec![];
+            for i in 1..=len {
+                items.push(unsafe { snek_str(*addr.offset(i) as i64) })
+            }
+            format!("(tuple {})", items.join(" "))
+        }
+        _ => format!("Unknown value: {}", val),
+    }
+}
+
+#[no_mangle]
 #[export_name = "\x01snek_print"]
 fn snek_print(val: i64) -> i64 {
-    match val {
-        5 => println!("true"),
-        1 => println!("false"),
-        n if n & 1 == 0 => println!("{}", val >> 2),
-        _ => println!("Unknown value: {}", val),
-    }
+    println!("{}", snek_str(val));
     return val;
 }
 
@@ -40,11 +63,7 @@ fn parse_input(input: &str) -> i64 {
 }
 
 fn print_value(i: i64) {
-    match i {
-        5 => println!("true"),
-        1 => println!("false"),
-        _ => println!("{}", i >> 2),
-    }
+    println!("{}", snek_str(i))
 }
 
 fn main() {
