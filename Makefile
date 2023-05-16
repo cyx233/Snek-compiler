@@ -18,7 +18,7 @@ tests/%.run: tests/%.s runtime/start.rs
 	rustc $(CFLAG) tests/ -lour_code:$* runtime/start.rs -o tests/$*.run
 
 tests/egg_eater/%.s: tests/egg_eater/%.boa src/main.rs
-	cargo run -- $< tests/$*.s
+	cargo run -- $< tests/egg_eater/$*.s
 
 tests/egg_eater/%.run: tests/egg_eater/%.s runtime/start.rs
 	nasm -f $(ARCH) tests/egg_eater/$*.s -o tests/egg_eater/$*.o
@@ -31,4 +31,5 @@ test:
 	cargo test
 
 clean:
-	rm -f tests/*.a tests/*.s tests/*.run tests/*.o
+	rm -f tests/*.a tests/*.s tests/*.run tests/*.o 
+	rm -f tests/egg_eater/*.a tests/egg_eater/*.s tests/egg_eater/*.run tests/egg_eater/*.o 

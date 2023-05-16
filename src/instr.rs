@@ -42,8 +42,8 @@ pub enum Instr {
     IAnd(Val, Val),
     Label(String),
     IntGuard(Val),
-    BoolGuard(Val),
     TupleGuard(Val),
+    LenGuard(Val, Val),
     Cmp(Val, Val),
     SetIfElse(Reg, Val, Val, CondFlag),
     JumpIf(String, CondFlag),
@@ -166,14 +166,18 @@ impl Instr {
                 Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero).to_string(),
             ]
             .join("\n"),
-            Instr::BoolGuard(v) => [
-                format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,1", v.to_string()),
-                Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero).to_string(),
-            ]
-            .join("\n"),
             Instr::TupleGuard(v) => [
                 format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,2", v.to_string()),
                 Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero).to_string(),
+            ]
+            .join("\n"),
+            Instr::LenGuard(tuple_ptr, index) => [
+                format!("\tmov rbx,{}", tuple_ptr.to_string()),
+                // tuple format
+                "\tshr rbx,32".to_string(),
+                "\tmov rbx,[rbx]".to_string(),
+                format!("\tcmp rbx,{}", index.to_string()),
+                Instr::JumpIf(ERR_OUT_OF_BOUND_LABEL.clone(), CondFlag::LessEqual).to_string(),
             ]
             .join("\n"),
             Instr::Cmp(v1, v2) => format!("\tcmp {},{}", v1.to_string(), v2.to_string()),
@@ -197,11 +201,15 @@ impl Instr {
             Instr::ICall(name) => format!("\tcall {}", name),
             Instr::Info(msg) => ";".to_string() + msg,
             Instr::Return() => "\tret".to_string(),
-            // tuple.i = [(tuple_ptr + ((index + 1)<<3<<32)) >> 32]
+            // tuple.i = [tuple_ptr + 8*(index+1)]
             Instr::GetItemAddr(target, ptr, index) => [
+                // validate bound
+                Instr::LenGuard(*ptr, *index).to_string(),
                 format!("\tmov rbx,{}", index.to_string()),
-                "\tadd rbx,1".to_string(),
-                "\tshl rbx,35".to_string(),
+                // int is ending with 00
+                "\tadd rbx,4".to_string(),
+                // 32(tuple format) + 3(1 byte) - 2 (int format) = 33
+                "\tshl rbx,33".to_string(),
                 format!("\tadd rbx,{}", ptr.to_string()),
                 "\tshr rbx,32".to_string(),
                 format!("\tmov {},rbx", target.to_string()),

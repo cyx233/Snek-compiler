@@ -1,7 +1,7 @@
 (let ((x (tuple 1 1 (tuple 1 1))))
 	(block
 		(print x)
-		(print (index x (+ 1 1)))
+		(print (index! x (+ 1 1)))
 		(setindex! x 0 x)
 		(print x)
 	)

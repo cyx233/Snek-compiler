@@ -475,6 +475,50 @@ fn compile_expr_to_instrs(
             ]);
             Ok(result)
         }
+        Expr::Index(tuple_expr, index) => {
+            // put tuple ptr in stack
+            let tuple_instrs = compile_expr_to_instrs(
+                tuple_expr,
+                label,
+                &CompileState {
+                    tail: false,
+                    result_target: Val::RegOffset(Reg::RSP, state.si),
+                    ..*state
+                },
+            )?;
+
+            let mut result = tuple_instrs;
+
+            // validate ptr
+            result.push(Instr::TupleGuard(Val::RegOffset(Reg::RSP, state.si)));
+
+            // put index in rax
+            let index_instrs = compile_expr_to_instrs(
+                index,
+                label,
+                &CompileState {
+                    si: state.si + 1,
+                    tail: false,
+                    result_target: Val::Reg(Reg::RAX),
+                    ..*state
+                },
+            )?;
+            result.extend(index_instrs);
+
+            result.extend([
+                // validate index
+                Instr::IntGuard(Val::Reg(Reg::RAX)),
+                // put item addr in rax
+                Instr::GetItemAddr(
+                    Val::Reg(Reg::RAX),
+                    Val::RegOffset(Reg::RSP, state.si),
+                    Val::Reg(Reg::RAX),
+                ),
+                // mov [rax] to result target
+                Instr::IMov(state.result_target, Val::RegOffset(Reg::RAX, 0)),
+            ]);
+            Ok(result)
+        }
         Expr::SetIndex(tuple_name, index_expr, value_expr) => {
             let tuple_ptr = match state.env.get(tuple_name) {
                 Some(n) => Ok(Val::RegOffset(Reg::RSP, *n + state.env_offset)),
@@ -488,6 +532,7 @@ fn compile_expr_to_instrs(
                 index_expr,
                 label,
                 &CompileState {
+                    tail: false,
                     result_target: Val::Reg(Reg::RAX),
                     ..*state
                 },
@@ -514,14 +559,14 @@ fn compile_expr_to_instrs(
             result.extend(value_instrs);
 
             //put the new value in item addr and result_target
-            result.extend([Instr::IMov(
-                Val::RegOffset(Reg::RAX, 0),
-                Val::RegOffset(Reg::RSP, state.si),
-            )]);
-            unimplemented!("index compile")
-        }
-        Expr::Index(tuple_expr, index) => {
-            unimplemented!("index compile")
+            result.extend([
+                Instr::IMov(
+                    Val::RegOffset(Reg::RAX, 0),
+                    Val::RegOffset(Reg::RSP, state.si),
+                ),
+                Instr::IMov(state.result_target, Val::RegOffset(Reg::RSP, state.si)),
+            ]);
+            Ok(result)
         }
     }
 }
