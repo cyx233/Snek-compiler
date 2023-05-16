@@ -80,7 +80,9 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             }
             // index <expr> <expr> => index
             [Sexp::Atom(S(op)), tuple_sexp, index_sexp] if op == "index!" => {
-                unimplemented!("index parse")
+                let tuple_expr = parse_expr(tuple_sexp)?;
+                let index_expr = parse_expr(index_sexp)?;
+                Ok(Expr::Index(Box::new(tuple_expr), Box::new(index_expr)))
             }
             // let, <bindings>, <expr> => Let
             [Sexp::Atom(S(op)), e1, e2] if op == "let" => match e1 {
@@ -104,7 +106,14 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             }
             // setindex! <expr> <expr> <expr> => SetIndex
             [Sexp::Atom(S(op)), tuple_sexp, index_sexp, value_sexp] if op == "setindex!" => {
-                unimplemented!("setindex parse")
+                let tuple_expr = parse_expr(tuple_sexp)?;
+                let index_expr = parse_expr(index_sexp)?;
+                let value_expr = parse_expr(value_sexp)?;
+                Ok(Expr::SetIndex(
+                    Box::new(tuple_expr),
+                    Box::new(index_expr),
+                    Box::new(value_expr),
+                ))
             }
             // if <expr> <expr> <expr> => If
             [Sexp::Atom(S(op)), cond, if_sexp, else_sexp] if op == "if" => {
