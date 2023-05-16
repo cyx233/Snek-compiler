@@ -199,7 +199,7 @@ fn compile_expr_to_instrs(
                         Reg::RAX,
                         Val::Boolean(true),
                         Val::Boolean(false),
-                        CondFlag::NotZero,
+                        CondFlag::Zero,
                     ),
                 ],
             };
