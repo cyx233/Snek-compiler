@@ -34,11 +34,11 @@ fn snek_str(val: i64) -> String {
             format!("{}", val >> 2)
         }
         2 => {
-            let addr = (val - 1) as *const i64;
-            let len = unsafe { *addr as isize };
+            let addr = (val - 2) as *const i64;
+            let len = unsafe { *addr >> 2 };
             let mut items: Vec<String> = vec![];
             for i in 1..=len {
-                items.push(unsafe { snek_str(*addr.offset(i) as i64) })
+                items.push(unsafe { snek_str(*addr.offset(i as isize)) })
             }
             format!("(tuple {})", items.join(" "))
         }

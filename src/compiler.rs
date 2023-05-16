@@ -62,6 +62,13 @@ fn depth(e: &Expr, tail: bool, cur_name: &String) -> i64 {
                 }
         }
         Expr::Print(expr) => depth(expr, false, cur_name) + 1,
+        Expr::Tuple(exprs) => exprs
+            .iter()
+            .map(|x| depth(x, false, cur_name))
+            .max()
+            .unwrap_or(0),
+        Expr::SetIndex(_, e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
+        Expr::Index(e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
         _ => 0,
     }
 }
@@ -446,9 +453,10 @@ fn compile_expr_to_instrs(
             }
         }
         Expr::Tuple(exprs) => {
+            // put len in [r15]
             let mut result = vec![Instr::IMov(
                 Val::RegOffset(Reg::R15, 0),
-                Val::Imm(exprs.len() as i64),
+                Val::Int(exprs.len() as i64),
             )];
             let items = exprs
                 .iter()
@@ -465,13 +473,14 @@ fn compile_expr_to_instrs(
                     )
                 })
                 .collect::<Result<Vec<Vec<Instr>>, String>>()?;
-
             for i in items {
                 result.extend(i);
             }
             result.extend([
+                Instr::IOr(Val::Reg(Reg::R15), Val::Imm(2)),
                 Instr::IMov(state.result_target, Val::Reg(Reg::R15)),
                 Instr::IAdd(Val::Reg(Reg::R15), Val::Imm(8 * (exprs.len() as i64 + 1))),
+                Instr::IAnd(Val::Reg(Reg::R15), Val::Imm(-4)),
             ]);
             Ok(result)
         }

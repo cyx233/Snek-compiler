@@ -173,6 +173,8 @@ impl Instr {
             .join("\n"),
             Instr::LenGuard(tuple_ptr, index) => [
                 format!("\tmov rbx,{}", tuple_ptr.to_string()),
+                // remove type bits
+                "\tand rbx,-4".to_string(),
                 // [tuple] = len(tuple)
                 "\tmov rbx,[rbx]".to_string(),
                 format!("\tcmp rbx,{}", index.to_string()),
@@ -211,6 +213,7 @@ impl Instr {
                 "\tadd rbx,8".to_string(),
                 // tuple_ptr + 8*(index+1)
                 format!("\tadd rbx,{}", ptr.to_string()),
+                "\tand rbx,-4".to_string(),
                 format!("\tmov {},rbx", target.to_string()),
             ]
             .join("\n"),

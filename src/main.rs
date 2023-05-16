@@ -40,6 +40,8 @@ fn main() -> std::io::Result<()> {
         "extern snek_error",
         "extern snek_print",
         "global our_code_starts_here",
+        "add r15,8",
+        "and r15,-8",
         &result,
         ";",
         &get_err_instrs(&ERR_INVALID_ARG_LABEL, *ERR_INVALID_ARG_CODE),
