@@ -28,7 +28,7 @@ pub enum Expr {
     Input,
     Index(Box<Expr>, Box<Expr>),
     Tuple(Vec<Expr>),
-    SetIndex(Box<Expr>, Box<Expr>, Box<Expr>),
+    SetIndex(String, Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug)]

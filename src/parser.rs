@@ -104,13 +104,14 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                 let e_instrs = parse_expr(e)?;
                 Ok(Expr::Set(id.clone(), Box::new(e_instrs)))
             }
-            // setindex! <expr> <expr> <expr> => SetIndex
-            [Sexp::Atom(S(op)), tuple_sexp, index_sexp, value_sexp] if op == "setindex!" => {
-                let tuple_expr = parse_expr(tuple_sexp)?;
+            // setindex! <name> <expr> <expr> => SetIndex
+            [Sexp::Atom(S(op)), Sexp::Atom(S(name)), index_sexp, value_sexp]
+                if op == "setindex!" =>
+            {
                 let index_expr = parse_expr(index_sexp)?;
                 let value_expr = parse_expr(value_sexp)?;
                 Ok(Expr::SetIndex(
-                    Box::new(tuple_expr),
+                    name.clone(),
                     Box::new(index_expr),
                     Box::new(value_expr),
                 ))

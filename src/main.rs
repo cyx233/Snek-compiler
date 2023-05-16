@@ -39,7 +39,7 @@ fn main() -> std::io::Result<()> {
 
     let overflow_intrs = get_err_instrs(&ERR_OVERFLOW_LABEL, *ERR_OVERFLOW_CODE);
 
-    let asm_program = vec![
+    let asm_program = [
         "section .text",
         "extern snek_error",
         "extern snek_print",

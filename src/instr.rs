@@ -1,9 +1,9 @@
+use crate::errors::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Val {
     Reg(Reg),
     Int(i64),
-    TupleItem(i64, i64),
-    TupleLen(i64),
     Imm(i64),
     Boolean(bool),
     RegOffset(Reg, i64),
@@ -15,6 +15,7 @@ pub enum Reg {
     RCX,
     RDI,
     RSP,
+    R15,
 }
 
 #[derive(Debug)]
@@ -40,15 +41,16 @@ pub enum Instr {
     IOr(Val, Val),
     IAnd(Val, Val),
     Label(String),
-    IntTest(Val),
-    BoolTest(Val),
-    TupleTest(Val),
+    IntGuard(Val),
+    BoolGuard(Val),
+    TupleGuard(Val),
     Cmp(Val, Val),
     SetIfElse(Reg, Val, Val, CondFlag),
     JumpIf(String, CondFlag),
     ICall(String),
     Info(String),
     Return(),
+    GetItemAddr(Val, Val, Val),
 }
 
 impl Reg {
@@ -58,6 +60,7 @@ impl Reg {
             Reg::RCX => "rcx".to_string(),
             Reg::RDI => "rdi".to_string(),
             Reg::RSP => "rsp".to_string(),
+            Reg::R15 => "r15".to_string(),
         }
     }
 }
@@ -73,12 +76,6 @@ impl Val {
                 } else {
                     "1".to_string()
                 }
-            }
-            Val::TupleItem(addr, index) => {
-                unimplemented!("tuple item")
-            }
-            Val::TupleLen(addr) => {
-                unimplemented!("tuple len")
             }
             Val::Reg(reg) => reg.to_string(),
             Val::RegOffset(reg, offset) => {
@@ -128,33 +125,57 @@ impl Instr {
                 Val::Reg(_) => format!("\tmov {},{}", v1.to_string(), v2.to_string()),
                 _ => match v2 {
                     Val::RegOffset(_, _) => {
-                        format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
+                        format!("\tmov rbx,{}\n\tmov {},rbx", v2.to_string(), v1.to_string())
                     }
                     Val::Imm(n) if *n > i32::MAX as i64 || *n < i32::MIN as i64 => {
-                        format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
+                        format!("\tmov rbx,{}\n\tmov {},rbx", v2.to_string(), v1.to_string())
                     }
                     Val::Int(n) if (n << 2) > i32::MAX as i64 || (n << 2) < i32::MIN as i64 => {
-                        format!("\tmov rax,{}\n\tmov {},rax", v2.to_string(), v1.to_string())
+                        format!("\tmov rbx,{}\n\tmov {},rbx", v2.to_string(), v1.to_string())
                     }
                     _ => format!("\tmov qword {},{}", v1.to_string(), v2.to_string()),
                 },
             },
-            Instr::IAdd(v1, v2) => format!("\tadd {},{}", v1.to_string(), v2.to_string()),
-            Instr::ISub(v1, v2) => format!("\tsub {},{}", v1.to_string(), v2.to_string()),
-            Instr::IMul(v1, v2) => format!(
-                "\tsar {},2\n\timul {},{}",
-                v1.to_string(),
-                v1.to_string(),
-                v2.to_string()
-            ),
+            Instr::IAdd(v1, v2) => [
+                format!("\tadd {},{}", v1.to_string(), v2.to_string()),
+                Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow).to_string(),
+            ]
+            .join("\n"),
+            Instr::ISub(v1, v2) => [
+                format!("\tsub {},{}", v1.to_string(), v2.to_string()),
+                Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow).to_string(),
+            ]
+            .join("\n"),
+            Instr::IMul(v1, v2) => [
+                format!(
+                    "\tsar {},2\n\timul {},{}",
+                    v1.to_string(),
+                    v1.to_string(),
+                    v2.to_string()
+                ),
+                Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow).to_string(),
+            ]
+            .join("\n"),
             Instr::IXor(v1, v2) => format!("\txor {},{}", v1.to_string(), v2.to_string()),
             Instr::IOr(v1, v2) => format!("\tor {},{}", v1.to_string(), v2.to_string()),
             Instr::IAnd(v1, v2) => format!("\tand {},{}", v1.to_string(), v2.to_string()),
             Instr::Label(name) => format!("{}:", name.clone()),
             // Int => 00, Bool => 01, Tuple => 10
-            Instr::IntTest(v) => format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,0", v.to_string()),
-            Instr::BoolTest(v) => format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,1", v.to_string()),
-            Instr::TupleTest(v) => format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,2", v.to_string()),
+            Instr::IntGuard(v) => [
+                format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,0", v.to_string()),
+                Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero).to_string(),
+            ]
+            .join("\n"),
+            Instr::BoolGuard(v) => [
+                format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,1", v.to_string()),
+                Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero).to_string(),
+            ]
+            .join("\n"),
+            Instr::TupleGuard(v) => [
+                format!("\tmov rbx,3\n\tand rbx,{}\n\tcmp rbx,2", v.to_string()),
+                Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero).to_string(),
+            ]
+            .join("\n"),
             Instr::Cmp(v1, v2) => format!("\tcmp {},{}", v1.to_string(), v2.to_string()),
             // reg = cond ? true_v : false_v
             Instr::SetIfElse(reg, true_v, false_v, cond) => match cond {
@@ -176,6 +197,16 @@ impl Instr {
             Instr::ICall(name) => format!("\tcall {}", name),
             Instr::Info(msg) => ";".to_string() + msg,
             Instr::Return() => "\tret".to_string(),
+            // tuple.i = [(tuple_ptr + ((index + 1)<<3<<32)) >> 32]
+            Instr::GetItemAddr(target, ptr, index) => [
+                format!("\tmov rbx,{}", index.to_string()),
+                "\tadd rbx,1".to_string(),
+                "\tshl rbx,35".to_string(),
+                format!("\tadd rbx,{}", ptr.to_string()),
+                "\tshr rbx,32".to_string(),
+                format!("\tmov {},rbx", target.to_string()),
+            ]
+            .join("\n"),
             _ => "".to_string(),
         }
     }
