@@ -56,7 +56,7 @@ fn depth(e: &Expr, tail: bool, cur_name: &String) -> i64 {
                 .max()
                 .unwrap_or(0)
                 + if tail && cur_name.eq(name) {
-                    exprs.len() as i64
+                    exprs.len() as i64 - 1
                 } else {
                     0
                 }
@@ -455,8 +455,9 @@ fn compile_expr_to_instrs(
         }
         Expr::Tuple(exprs) => {
             let mut result = vec![];
+            let (last, rest) = exprs.split_last().unwrap();
             // put len in [r15]
-            let items = exprs
+            let items = rest
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
@@ -475,11 +476,26 @@ fn compile_expr_to_instrs(
             for i in items {
                 result.extend(i);
             }
-            result.push(Instr::IMov(
-                Val::RegOffset(Reg::R15, 0),
-                Val::Int(exprs.len() as i64),
-            ));
-            for i in 0..exprs.len() {
+            // the last one can be put in rax
+            let last_instrs = compile_expr_to_instrs(
+                last,
+                label,
+                &CompileState {
+                    si: state.si + exprs.len() as i64 - 1,
+                    tail: false,
+                    result_target: Val::Reg(Reg::RAX),
+                    ..*state
+                },
+            )?;
+            result.extend(last_instrs);
+            result.extend([
+                Instr::IMov(Val::RegOffset(Reg::R15, 0), Val::Int(exprs.len() as i64)),
+                Instr::IMov(
+                    Val::RegOffset(Reg::R15, exprs.len() as i64),
+                    Val::Reg(Reg::RAX),
+                ),
+            ]);
+            for i in 0..exprs.len() - 1 {
                 result.push(Instr::IMov(
                     Val::RegOffset(Reg::R15, i as i64 + 1),
                     Val::RegOffset(Reg::RSP, i as i64 + state.si),
