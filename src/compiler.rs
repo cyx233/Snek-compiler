@@ -525,10 +525,9 @@ fn compile_expr_to_instrs(
                 ))
             }
             result.extend([
-                Instr::IOr(Val::Reg(Reg::R15), Val::Imm(2)),
                 Instr::IMov(state.result_target, Val::Reg(Reg::R15)),
+                Instr::IOr(state.result_target, Val::Imm(2)),
                 Instr::IAdd(Val::Reg(Reg::R15), Val::Imm(8 * (exprs.len() as i64 + 1))),
-                Instr::IAnd(Val::Reg(Reg::R15), Val::Imm(-4)),
                 Instr::Info("===== tuple end =====".to_string()),
             ]);
             Ok(result)

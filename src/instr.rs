@@ -159,7 +159,10 @@ impl Instr {
             ]
             .join("\n"),
             Instr::IXor(v1, v2) => format!("\txor {},{}", v1.to_string(), v2.to_string()),
-            Instr::IOr(v1, v2) => format!("\tor {},{}", v1.to_string(), v2.to_string()),
+            Instr::IOr(v1, v2) => match v1 {
+                Val::RegOffset(_, _) => format!("\tor qword {},{}", v1.to_string(), v2.to_string()),
+                _ => format!("\tor {},{}", v1.to_string(), v2.to_string()),
+            },
             Instr::IAnd(v1, v2) => format!("\tand {},{}", v1.to_string(), v2.to_string()),
             Instr::Label(name) => format!("{}:", name.clone()),
             // Int => 00, Bool => 01, Tuple => 10
