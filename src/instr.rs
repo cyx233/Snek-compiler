@@ -14,6 +14,7 @@ pub enum Reg {
     RAX,
     RCX,
     RDI,
+    RSI,
     RSP,
     R15,
 }
@@ -59,6 +60,7 @@ impl Reg {
             Reg::RAX => "rax".to_string(),
             Reg::RCX => "rcx".to_string(),
             Reg::RDI => "rdi".to_string(),
+            Reg::RSI => "rsi".to_string(),
             Reg::RSP => "rsp".to_string(),
             Reg::R15 => "r15".to_string(),
         }

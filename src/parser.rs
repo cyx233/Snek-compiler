@@ -148,7 +148,10 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
             }
             // <binop>, <expr>, <expr> => BinOp
             [Sexp::Atom(S(op)), e1, e2]
-                if matches!(op.as_str(), "+" | "-" | "*" | ">" | "<" | ">=" | "<=" | "=") =>
+                if matches!(
+                    op.as_str(),
+                    "+" | "-" | "*" | ">" | "<" | ">=" | "<=" | "=" | ".="
+                ) =>
             {
                 let expr_op = match op.as_str() {
                     "+" => Op2::Plus,
@@ -159,6 +162,7 @@ fn parse_expr(s: &Sexp) -> Result<Expr, String> {
                     ">=" => Op2::GreaterEqual,
                     "<=" => Op2::LessEqual,
                     "=" => Op2::Equal,
+                    ".=" => Op2::DeepEqual,
                     _ => return Err(format!("Invalid operator {}", op)),
                 };
                 let e1_instrs = parse_expr(e1)?;

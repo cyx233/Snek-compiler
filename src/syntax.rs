@@ -45,6 +45,7 @@ pub enum Op2 {
     Minus,
     Times,
     Equal,
+    DeepEqual,
     Greater,
     GreaterEqual,
     Less,

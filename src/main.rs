@@ -39,6 +39,7 @@ fn main() -> std::io::Result<()> {
         "section .text",
         "extern snek_error",
         "extern snek_print",
+        "extern snek_eq",
         "global our_code_starts_here",
         "add r15,8",
         "and r15,-8",

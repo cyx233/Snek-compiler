@@ -240,7 +240,7 @@ fn compile_expr_to_instrs(
             let tc_instrs = match op {
                 // Op2::Eqaul accepts 2 values of the same type
                 // xor the type bits
-                Op2::Equal => vec![
+                Op2::Equal | Op2::DeepEqual => vec![
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IXor(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::IAnd(Val::Reg(Reg::RAX), Val::Imm(3)),
@@ -260,6 +260,20 @@ fn compile_expr_to_instrs(
                 Op2::Plus => vec![Instr::IAdd(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX))],
                 Op2::Minus => vec![Instr::ISub(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX))],
                 Op2::Times => vec![Instr::IMul(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX))],
+                Op2::DeepEqual => vec![
+                    //rdi, rsi are arg1 and arg2
+                    Instr::IMov(Val::RegOffset(Reg::RSP, state.si), Val::Reg(Reg::RDI)),
+                    Instr::IMov(Val::Reg(Reg::RDI), Val::Reg(Reg::RAX)),
+                    Instr::IMov(Val::Reg(Reg::RSI), Val::Reg(Reg::RCX)),
+                    //rsp should be aligned with 16 for rust lib
+                    Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RSP)),
+                    Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(8)),
+                    Instr::IAnd(Val::Reg(Reg::RSP), Val::Imm(-16)),
+                    Instr::IMov(Val::RegOffset(Reg::RSP, 0), Val::Reg(Reg::RCX)),
+                    Instr::ICall("snek_eq".to_string()),
+                    Instr::IMov(Val::Reg(Reg::RSP), Val::RegOffset(Reg::RSP, 0)),
+                    Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, state.si)),
+                ],
                 Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => vec![
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
                     Instr::SetIfElse(
