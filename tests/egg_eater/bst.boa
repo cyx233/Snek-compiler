@@ -1,0 +1,40 @@
+(fun (create_node value left right)
+	(tuple value left right))
+
+(fun (empty_tree)
+	(tuple false false false))
+
+(fun (add_element tree value)
+	(if (.= tree (empty_tree))
+		(create_node value (empty_tree) (empty_tree))
+		(let ((node_value (index! tree 0))
+				(left_tree (index! tree 1))
+				(right_tree (index! tree 2)))
+			(if (< value node_value)
+				(create_node node_value (add_element left_tree value) right_tree)
+				(create_node node_value left_tree (add_element right_tree value))))))
+
+(fun (search_element tree value)
+	(if (.= tree (empty_tree))
+		false
+		(let ((node_value (index! tree 0))
+			(left_tree (index! tree 1))
+			(right_tree (index! tree 2)))
+		(if (= value node_value)
+			true
+			(if (< value node_value)
+			(search_element left_tree value)
+			(search_element right_tree value))))))
+
+(let ((bst (empty_tree)))
+	(block
+		(set! bst (add_element bst 5))
+		(set! bst (add_element bst 3))
+		(set! bst (add_element bst 7))
+		(set! bst (add_element bst 1))
+		(set! bst (add_element bst 4))
+		(print (search_element bst 4))
+		(print (search_element bst 6))
+		(search_element bst 8)
+	)
+)

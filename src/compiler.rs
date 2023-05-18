@@ -49,25 +49,26 @@ fn depth(e: &Expr, tail: bool, cur_name: &String) -> i64 {
                 0
             }
         }
-        Expr::Call(name, exprs) => {
-            exprs
-                .iter()
-                .map(|x| depth(x, false, name))
-                .max()
-                .unwrap_or(0)
-                + if tail && cur_name.eq(name) {
-                    exprs.len() as i64 - 1
-                } else {
-                    0
-                }
-        }
+        Expr::Call(name, exprs) => exprs
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                depth(x, false, name)
+                    + if tail && cur_name.eq(name) {
+                        i as i64 + 1
+                    } else {
+                        0
+                    }
+            })
+            .max()
+            .unwrap_or(0),
         Expr::Print(expr) => depth(expr, false, cur_name) + 1,
         Expr::Tuple(exprs) => exprs
             .iter()
-            .map(|x| depth(x, false, cur_name))
+            .enumerate()
+            .map(|(i, x)| depth(x, false, cur_name) + i as i64)
             .max()
-            .unwrap_or(0)
-            .max(exprs.len() as i64),
+            .unwrap_or(0),
         Expr::SetIndex(_, e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
         Expr::Index(e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
         _ => 0,
@@ -90,10 +91,13 @@ fn compile_expr_to_instrs(
             }
         }
         Expr::Id(id) => match state.env.get(id) {
-            Some(n) => Ok(vec![Instr::IMov(
-                state.result_target,
-                Val::RegOffset(Reg::RSP, *n + state.env_offset),
-            )]),
+            Some(n) => Ok(vec![
+                Instr::Info(format!("load {}", id)),
+                Instr::IMov(
+                    state.result_target,
+                    Val::RegOffset(Reg::RSP, *n + state.env_offset),
+                ),
+            ]),
             None => Err(format!("Unbound variable identifier {id}")),
         },
         Expr::Let(bindings, body) => {
@@ -347,6 +351,7 @@ fn compile_expr_to_instrs(
             }
         }
         Expr::Set(id, expr) => {
+            let mut result = vec![Instr::Info("===== set begin =====".to_string())];
             let set_target = match state.env.get(id) {
                 Some(n) => Ok(Val::RegOffset(Reg::RSP, *n + state.env_offset)),
                 None => Err(format!("Unbound variable identifier {id}")),
@@ -359,9 +364,12 @@ fn compile_expr_to_instrs(
                     ..*state
                 },
             )?;
-            let mut result = e_instrs;
-            result.push(Instr::IMov(set_target, Val::Reg(Reg::RAX)));
-            result.push(Instr::IMov(state.result_target, Val::Reg(Reg::RAX)));
+            result.extend(e_instrs);
+            result.extend([
+                Instr::IMov(set_target, Val::Reg(Reg::RAX)),
+                Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
+                Instr::Info("===== set end =====".to_string()),
+            ]);
             Ok(result)
         }
         Expr::Block(expr_vec) => {
@@ -469,7 +477,7 @@ fn compile_expr_to_instrs(
             }
         }
         Expr::Tuple(exprs) => {
-            let mut result = vec![];
+            let mut result = vec![Instr::Info("===== tuple begin =====".to_string())];
             let (last, rest) = exprs.split_last().unwrap();
             // put len in [r15]
             let items = rest
@@ -521,10 +529,12 @@ fn compile_expr_to_instrs(
                 Instr::IMov(state.result_target, Val::Reg(Reg::R15)),
                 Instr::IAdd(Val::Reg(Reg::R15), Val::Imm(8 * (exprs.len() as i64 + 1))),
                 Instr::IAnd(Val::Reg(Reg::R15), Val::Imm(-4)),
+                Instr::Info("===== tuple end =====".to_string()),
             ]);
             Ok(result)
         }
         Expr::Index(tuple_expr, index) => {
+            let mut result = vec![Instr::Info("===== index begin =====".to_string())];
             // put tuple ptr in stack
             let tuple_instrs = compile_expr_to_instrs(
                 tuple_expr,
@@ -536,7 +546,7 @@ fn compile_expr_to_instrs(
                 },
             )?;
 
-            let mut result = tuple_instrs;
+            result.extend(tuple_instrs);
 
             // validate ptr
             result.push(Instr::TupleGuard(Val::RegOffset(Reg::RSP, state.si)));
@@ -565,6 +575,7 @@ fn compile_expr_to_instrs(
                 ),
                 // mov [rax] to result target
                 Instr::IMov(state.result_target, Val::RegOffset(Reg::RAX, 0)),
+                Instr::Info("===== index end =====".to_string()),
             ]);
             Ok(result)
         }
@@ -574,7 +585,10 @@ fn compile_expr_to_instrs(
                 None => Err(format!("Unbound variable identifier {tuple_name}")),
             }?;
             // validate ptr
-            let mut result = vec![Instr::TupleGuard(tuple_ptr)];
+            let mut result = vec![
+                Instr::Info("===== setindex begin =====".to_string()),
+                Instr::TupleGuard(tuple_ptr),
+            ];
 
             // put index in rax
             let index_instrs = compile_expr_to_instrs(
@@ -612,6 +626,7 @@ fn compile_expr_to_instrs(
                 Instr::IMov(Val::Reg(Reg::RCX), Val::RegOffset(Reg::RSP, state.si)),
                 Instr::IMov(Val::RegOffset(Reg::RCX, 0), Val::Reg(Reg::RAX)),
                 Instr::IMov(state.result_target, tuple_ptr),
+                Instr::Info("===== setindex end =====".to_string()),
             ]);
             Ok(result)
         }

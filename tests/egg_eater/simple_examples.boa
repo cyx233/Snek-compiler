@@ -1,6 +1,6 @@
 (let ((x (tuple 1 2 (tuple 3 4))))
 	(block
 		(print x)
-		(print (index! x (+ 1 1)))
+		(index! x (+ 1 1))
 	)
 )
