@@ -2,7 +2,7 @@ UNAME := $(shell uname)
 
 ifeq ($(UNAME), Linux)
 ARCH := elf64
-CFLAG := -L
+CFLAG := -g -L
 endif
 ifeq ($(UNAME), Darwin)
 ARCH := macho64

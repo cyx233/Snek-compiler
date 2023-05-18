@@ -153,6 +153,7 @@ fn compile_expr_to_instrs(
             )?;
             result.extend(e_instrs);
             result.extend([
+                //rsp should be aligned with 16 for rust lib
                 Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RSP)),
                 Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(8)),
                 Instr::IAnd(Val::Reg(Reg::RSP), Val::Imm(-16)),
@@ -592,13 +593,11 @@ fn compile_expr_to_instrs(
             )?;
             result.extend(value_instrs);
 
-            //put the new value in item addr and result_target
+            //put the new value in item addr and put the tuple ptr in result_target
             result.extend([
-                Instr::IMov(
-                    Val::RegOffset(Reg::RAX, 0),
-                    Val::RegOffset(Reg::RSP, state.si),
-                ),
-                Instr::IMov(state.result_target, Val::RegOffset(Reg::RSP, state.si)),
+                Instr::IMov(Val::Reg(Reg::RCX), Val::RegOffset(Reg::RSP, state.si)),
+                Instr::IMov(Val::RegOffset(Reg::RCX, 0), Val::Reg(Reg::RAX)),
+                Instr::IMov(state.result_target, tuple_ptr),
             ]);
             Ok(result)
         }
