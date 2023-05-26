@@ -35,20 +35,21 @@ fn main() -> std::io::Result<()> {
     let expr = parse_code(&in_contents);
     let result = compile(&expr);
 
-    let invalid_arg_instr = get_err_instrs(&ERR_INVALID_ARG_LABEL, *ERR_INVALID_ARG_CODE);
-
-    let overflow_intrs = get_err_instrs(&ERR_OVERFLOW_LABEL, *ERR_OVERFLOW_CODE);
-
-    let asm_program = vec![
+    let asm_program = [
         "section .text",
         "extern snek_error",
         "extern snek_print",
+        "extern snek_eq",
         "global our_code_starts_here",
+        "add r15,8",
+        "and r15,-8",
         &result,
         ";",
-        &overflow_intrs,
+        &get_err_instrs(&ERR_INVALID_ARG_LABEL, *ERR_INVALID_ARG_CODE),
         ";",
-        &invalid_arg_instr,
+        &get_err_instrs(&ERR_OVERFLOW_LABEL, *ERR_OVERFLOW_CODE),
+        ";",
+        &get_err_instrs(&ERR_OUT_OF_BOUND_LABEL, *ERR_OUT_OF_BOUND_CODE),
     ]
     .join("\n");
 

@@ -397,13 +397,13 @@ runtime_error_tests! {
     {
         name: number_overflow_fail2,
         file: "add.snek",
-        input: "4611686018427387899",
+        input: "2305843009213693947",
         expected: "overflow",
     },
     {
         name: number_overflow_fail3,
         file: "nested_arith3.snek",
-        input: "4611686018427387890",
+        input: "2305843009213693938",
         expected: "overflow",
     },
 

@@ -26,6 +26,9 @@ pub enum Expr {
     Block(Vec<Expr>),
     Call(String, Vec<Expr>),
     Input,
+    Index(Box<Expr>, Box<Expr>),
+    Tuple(Vec<Expr>),
+    SetIndex(String, Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug)]
@@ -42,6 +45,7 @@ pub enum Op2 {
     Minus,
     Times,
     Equal,
+    DeepEqual,
     Greater,
     GreaterEqual,
     Less,

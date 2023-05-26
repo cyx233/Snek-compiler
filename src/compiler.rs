@@ -49,19 +49,28 @@ fn depth(e: &Expr, tail: bool, cur_name: &String) -> i64 {
                 0
             }
         }
-        Expr::Call(name, exprs) => {
-            exprs
-                .iter()
-                .map(|x| depth(x, false, name))
-                .max()
-                .unwrap_or(0)
-                + if tail && cur_name.eq(name) {
-                    exprs.len() as i64
-                } else {
-                    0
-                }
-        }
+        Expr::Call(name, exprs) => exprs
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                depth(x, false, name)
+                    + if tail && cur_name.eq(name) {
+                        i as i64 + 1
+                    } else {
+                        0
+                    }
+            })
+            .max()
+            .unwrap_or(0),
         Expr::Print(expr) => depth(expr, false, cur_name) + 1,
+        Expr::Tuple(exprs) => exprs
+            .iter()
+            .enumerate()
+            .map(|(i, x)| depth(x, false, cur_name) + i as i64)
+            .max()
+            .unwrap_or(0),
+        Expr::SetIndex(_, e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
+        Expr::Index(e1, e2) => depth(e1, false, cur_name).max(depth(e2, false, cur_name) + 1),
         _ => 0,
     }
 }
@@ -82,10 +91,13 @@ fn compile_expr_to_instrs(
             }
         }
         Expr::Id(id) => match state.env.get(id) {
-            Some(n) => Ok(vec![Instr::IMov(
-                state.result_target,
-                Val::RegOffset(Reg::RSP, *n + state.env_offset),
-            )]),
+            Some(n) => Ok(vec![
+                Instr::Info(format!("load {}", id)),
+                Instr::IMov(
+                    state.result_target,
+                    Val::RegOffset(Reg::RSP, *n + state.env_offset),
+                ),
+            ]),
             None => Err(format!("Unbound variable identifier {id}")),
         },
         Expr::Let(bindings, body) => {
@@ -144,7 +156,8 @@ fn compile_expr_to_instrs(
                 },
             )?;
             result.extend(e_instrs);
-            result.extend(vec![
+            result.extend([
+                //rsp should be aligned with 16 for rust lib
                 Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RSP)),
                 Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(8)),
                 Instr::IAnd(Val::Reg(Reg::RSP), Val::Imm(-16)),
@@ -170,22 +183,20 @@ fn compile_expr_to_instrs(
             let op_instrs = match op {
                 Op1::Add1 => {
                     vec![
-                        Instr::TypeTest(Val::Reg(Reg::RAX)),
-                        Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
+                        Instr::IntGuard(Val::Reg(Reg::RAX)),
                         Instr::IAdd(Val::Reg(Reg::RAX), Val::Int(1)),
-                        Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
                 Op1::Sub1 => {
                     vec![
-                        Instr::TypeTest(Val::Reg(Reg::RAX)),
-                        Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
+                        Instr::IntGuard(Val::Reg(Reg::RAX)),
                         Instr::ISub(Val::Reg(Reg::RAX), Val::Int(1)),
-                        Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
                     ]
                 }
+                //int => 00
                 Op1::IsNum => vec![
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IAnd(Val::Reg(Reg::RAX), Val::Imm(3)),
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::Imm(0)),
                     Instr::SetIfElse(
                         Reg::RAX,
                         Val::Boolean(true),
@@ -193,13 +204,15 @@ fn compile_expr_to_instrs(
                         CondFlag::Zero,
                     ),
                 ],
+                //bool => 01
                 Op1::IsBool => vec![
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IAnd(Val::Reg(Reg::RAX), Val::Imm(3)),
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::Imm(1)),
                     Instr::SetIfElse(
                         Reg::RAX,
                         Val::Boolean(true),
                         Val::Boolean(false),
-                        CondFlag::NotZero,
+                        CondFlag::Zero,
                     ),
                 ],
             };
@@ -229,11 +242,13 @@ fn compile_expr_to_instrs(
                 },
             )?;
             let tc_instrs = match op {
-                // Op2::Eqaul accepts 2 Bool or 2 Int
-                Op2::Equal => vec![
+                // Op2::Eqaul accepts 2 values of the same type
+                // xor the type bits
+                Op2::Equal | Op2::DeepEqual => vec![
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IXor(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
+                    Instr::IAnd(Val::Reg(Reg::RAX), Val::Imm(3)),
+                    Instr::Cmp(Val::Reg(Reg::RAX), Val::Imm(0)),
                     Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                 ],
@@ -241,23 +256,27 @@ fn compile_expr_to_instrs(
                 _ => vec![
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                     Instr::IOr(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::TypeTest(Val::Reg(Reg::RAX)),
-                    Instr::JumpIf(ERR_INVALID_ARG_LABEL.clone(), CondFlag::NotZero),
+                    Instr::IntGuard(Val::Reg(Reg::RAX)),
                     Instr::IMov(Val::Reg(Reg::RAX), Val::RegOffset(Reg::RSP, state.si)),
                 ],
             };
             let op_instrs = match op {
-                Op2::Plus => vec![
-                    Instr::IAdd(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
-                ],
-                Op2::Minus => vec![
-                    Instr::ISub(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
-                ],
-                Op2::Times => vec![
-                    Instr::IMul(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
-                    Instr::JumpIf(ERR_OVERFLOW_LABEL.clone(), CondFlag::Overflow),
+                Op2::Plus => vec![Instr::IAdd(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX))],
+                Op2::Minus => vec![Instr::ISub(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX))],
+                Op2::Times => vec![Instr::IMul(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX))],
+                Op2::DeepEqual => vec![
+                    //rdi, rsi are arg1 and arg2
+                    Instr::IMov(Val::RegOffset(Reg::RSP, state.si), Val::Reg(Reg::RDI)),
+                    Instr::IMov(Val::Reg(Reg::RDI), Val::Reg(Reg::RAX)),
+                    Instr::IMov(Val::Reg(Reg::RSI), Val::Reg(Reg::RCX)),
+                    //rsp should be aligned with 16 for rust lib
+                    Instr::IMov(Val::Reg(Reg::RCX), Val::Reg(Reg::RSP)),
+                    Instr::ISub(Val::Reg(Reg::RSP), Val::Imm(8)),
+                    Instr::IAnd(Val::Reg(Reg::RSP), Val::Imm(-16)),
+                    Instr::IMov(Val::RegOffset(Reg::RSP, 0), Val::Reg(Reg::RCX)),
+                    Instr::ICall("snek_eq".to_string()),
+                    Instr::IMov(Val::Reg(Reg::RSP), Val::RegOffset(Reg::RSP, 0)),
+                    Instr::IMov(Val::Reg(Reg::RDI), Val::RegOffset(Reg::RSP, state.si)),
                 ],
                 Op2::Equal | Op2::Greater | Op2::GreaterEqual | Op2::Less | Op2::LessEqual => vec![
                     Instr::Cmp(Val::Reg(Reg::RAX), Val::Reg(Reg::RCX)),
@@ -292,12 +311,12 @@ fn compile_expr_to_instrs(
             let else_instrs = compile_expr_to_instrs(else_expr, label, state)?;
 
             let mut result = cond_instrs;
-            result.extend(vec![
+            result.extend([
                 Instr::Cmp(Val::Reg(Reg::RAX), Val::Boolean(false)),
                 Instr::JumpIf(else_label.clone(), CondFlag::Zero),
             ]);
             result.extend(if_instrs);
-            result.extend(vec![
+            result.extend([
                 Instr::JumpIf(end_label.clone(), CondFlag::Always),
                 Instr::Label(else_label.clone()),
             ]);
@@ -332,6 +351,7 @@ fn compile_expr_to_instrs(
             }
         }
         Expr::Set(id, expr) => {
+            let mut result = vec![Instr::Info("===== set begin =====".to_string())];
             let set_target = match state.env.get(id) {
                 Some(n) => Ok(Val::RegOffset(Reg::RSP, *n + state.env_offset)),
                 None => Err(format!("Unbound variable identifier {id}")),
@@ -344,9 +364,12 @@ fn compile_expr_to_instrs(
                     ..*state
                 },
             )?;
-            let mut result = e_instrs;
-            result.push(Instr::IMov(set_target, Val::Reg(Reg::RAX)));
-            result.push(Instr::IMov(state.result_target, Val::Reg(Reg::RAX)));
+            result.extend(e_instrs);
+            result.extend([
+                Instr::IMov(set_target, Val::Reg(Reg::RAX)),
+                Instr::IMov(state.result_target, Val::Reg(Reg::RAX)),
+                Instr::Info("===== set end =====".to_string()),
+            ]);
             Ok(result)
         }
         Expr::Block(expr_vec) => {
@@ -403,7 +426,7 @@ fn compile_expr_to_instrs(
                     // reuse stack
                     // call and restore stack
                     // don't need to save rdi twice here, restore rdi directly from old stack
-                    result.extend(vec![
+                    result.extend([
                         Instr::IAdd(Val::Reg(Reg::RSP), Val::Imm(state.stack_depth * 8)),
                         Instr::JumpIf(name.clone(), CondFlag::Always),
                         Instr::IMov(
@@ -432,7 +455,7 @@ fn compile_expr_to_instrs(
                         result.extend(instrs);
                     }
                     // call and restore stack
-                    result.extend(vec![
+                    result.extend([
                         Instr::IMov(
                             Val::RegOffset(Reg::RSP, args_offset - 1),
                             Val::Reg(Reg::RDI),
@@ -452,6 +475,159 @@ fn compile_expr_to_instrs(
             } else {
                 Err(format!("Undefined func {}", name))
             }
+        }
+        Expr::Tuple(exprs) => {
+            let mut result = vec![Instr::Info("===== tuple begin =====".to_string())];
+            let (last, rest) = exprs.split_last().unwrap();
+            // put len in [r15]
+            let items = rest
+                .iter()
+                .enumerate()
+                .map(|(i, x)| {
+                    compile_expr_to_instrs(
+                        x,
+                        label,
+                        &CompileState {
+                            si: state.si + i as i64,
+                            tail: false,
+                            result_target: Val::RegOffset(Reg::RSP, state.si + i as i64),
+                            ..*state
+                        },
+                    )
+                })
+                .collect::<Result<Vec<Vec<Instr>>, String>>()?;
+            for i in items {
+                result.extend(i);
+            }
+            // the last one can be put in rax
+            let last_instrs = compile_expr_to_instrs(
+                last,
+                label,
+                &CompileState {
+                    si: state.si + exprs.len() as i64 - 1,
+                    tail: false,
+                    result_target: Val::Reg(Reg::RAX),
+                    ..*state
+                },
+            )?;
+            result.extend(last_instrs);
+            result.extend([
+                Instr::IMov(Val::RegOffset(Reg::R15, 0), Val::Int(exprs.len() as i64)),
+                Instr::IMov(
+                    Val::RegOffset(Reg::R15, exprs.len() as i64),
+                    Val::Reg(Reg::RAX),
+                ),
+            ]);
+            for i in 0..exprs.len() - 1 {
+                result.push(Instr::IMov(
+                    Val::RegOffset(Reg::R15, i as i64 + 1),
+                    Val::RegOffset(Reg::RSP, i as i64 + state.si),
+                ))
+            }
+            result.extend([
+                Instr::IMov(state.result_target, Val::Reg(Reg::R15)),
+                Instr::IOr(state.result_target, Val::Imm(2)),
+                Instr::IAdd(Val::Reg(Reg::R15), Val::Imm(8 * (exprs.len() as i64 + 1))),
+                Instr::Info("===== tuple end =====".to_string()),
+            ]);
+            Ok(result)
+        }
+        Expr::Index(tuple_expr, index) => {
+            let mut result = vec![Instr::Info("===== index begin =====".to_string())];
+            // put tuple ptr in stack
+            let tuple_instrs = compile_expr_to_instrs(
+                tuple_expr,
+                label,
+                &CompileState {
+                    tail: false,
+                    result_target: Val::RegOffset(Reg::RSP, state.si),
+                    ..*state
+                },
+            )?;
+
+            result.extend(tuple_instrs);
+
+            // validate ptr
+            result.push(Instr::TupleGuard(Val::RegOffset(Reg::RSP, state.si)));
+
+            // put index in rax
+            let index_instrs = compile_expr_to_instrs(
+                index,
+                label,
+                &CompileState {
+                    si: state.si + 1,
+                    tail: false,
+                    result_target: Val::Reg(Reg::RAX),
+                    ..*state
+                },
+            )?;
+            result.extend(index_instrs);
+
+            result.extend([
+                // validate index
+                Instr::IntGuard(Val::Reg(Reg::RAX)),
+                // put item addr in rax
+                Instr::GetItemAddr(
+                    Val::Reg(Reg::RAX),
+                    Val::RegOffset(Reg::RSP, state.si),
+                    Val::Reg(Reg::RAX),
+                ),
+                // mov [rax] to result target
+                Instr::IMov(state.result_target, Val::RegOffset(Reg::RAX, 0)),
+                Instr::Info("===== index end =====".to_string()),
+            ]);
+            Ok(result)
+        }
+        Expr::SetIndex(tuple_name, index_expr, value_expr) => {
+            let tuple_ptr = match state.env.get(tuple_name) {
+                Some(n) => Ok(Val::RegOffset(Reg::RSP, *n + state.env_offset)),
+                None => Err(format!("Unbound variable identifier {tuple_name}")),
+            }?;
+            // validate ptr
+            let mut result = vec![
+                Instr::Info("===== setindex begin =====".to_string()),
+                Instr::TupleGuard(tuple_ptr),
+            ];
+
+            // put index in rax
+            let index_instrs = compile_expr_to_instrs(
+                index_expr,
+                label,
+                &CompileState {
+                    tail: false,
+                    result_target: Val::Reg(Reg::RAX),
+                    ..*state
+                },
+            )?;
+            result.extend(index_instrs);
+
+            // put item addr in stack
+            result.push(Instr::GetItemAddr(
+                Val::RegOffset(Reg::RSP, state.si),
+                tuple_ptr,
+                Val::Reg(Reg::RAX),
+            ));
+
+            // put the new value in rax
+            let value_instrs = compile_expr_to_instrs(
+                value_expr,
+                label,
+                &CompileState {
+                    si: state.si + 1,
+                    result_target: Val::Reg(Reg::RAX),
+                    ..*state
+                },
+            )?;
+            result.extend(value_instrs);
+
+            //put the new value in item addr and put the tuple ptr in result_target
+            result.extend([
+                Instr::IMov(Val::Reg(Reg::RCX), Val::RegOffset(Reg::RSP, state.si)),
+                Instr::IMov(Val::RegOffset(Reg::RCX, 0), Val::Reg(Reg::RAX)),
+                Instr::IMov(state.result_target, tuple_ptr),
+                Instr::Info("===== setindex end =====".to_string()),
+            ]);
+            Ok(result)
         }
     }
 }
