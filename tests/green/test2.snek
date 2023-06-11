@@ -1,0 +1,11 @@
+(fun (is_even n)
+  (if (= n 0)
+      true
+      (is_odd (sub1 n))))
+
+(fun (is_odd n)
+  (if (= n 0)
+      false
+      (is_even (sub1 n))))
+
+(is_even 10000)

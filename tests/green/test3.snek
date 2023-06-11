@@ -1,0 +1,9 @@
+(fun (fib_aux n a b)
+  (if (= n 0)
+      a
+      (fib_aux (sub1 n) b (+ a b))))
+
+(fun (fib n)
+  (fib_aux n 0 1))
+
+(fib 20)

@@ -1,0 +1,6 @@
+(fun (sum n acc)
+  (if (= n 0)
+      acc
+      (sum (sub1 n) (+ n acc))))
+
+(sum 5000 0)
